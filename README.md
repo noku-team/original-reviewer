@@ -148,7 +148,9 @@ Mention @original-reviewer review on a PR to run it by hand. Put @original-revie
 
 Leave **Account** and **Organization** permissions at No access. Do not grant Workflows, Actions, or Merge queues.
 
-**Subscribe to events:** Check run, Installation, Installation repositories, Issue comment, Pull request, Pull request review comment, Push.
+**Subscribe to events** (this list): Check run, Issue comment, Pull request, Pull request review comment, Push.
+
+Do **not** tick **Installation target** — that fires when an account/org is renamed. `installation` and `installation_repositories` are [sent to every GitHub App by default](https://docs.github.com/webhooks/webhook-events-and-payloads#installation) and do not appear here.
 
 Local webhook (dev): expose `http://localhost:3000` with Cloudflare Tunnel or ngrok, then put that origin in Webhook URL and Setup URL.
 
