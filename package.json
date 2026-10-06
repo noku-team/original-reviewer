@@ -10,12 +10,15 @@
     "dev": "tsx src/server.ts"
   },
   "devDependencies": {
+    "@types/minimatch": "^5.1.2",
     "@types/node": "^22.13.10",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2",
     "vitest": "^3.0.8"
   },
   "dependencies": {
-    "ioredis": "^6.0.0"
+    "ioredis": "^6.0.0",
+    "minimatch": "^10.2.6",
+    "yaml": "^2.9.1"
   }
 }
