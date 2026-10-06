@@ -4,4 +4,4 @@ Open-source GitHub App for CodeRabbit-shaped pull request review. Inference runs
 
 **Design spec (this slice):** [docs/superpowers/specs/2026-10-06-original-reviewer-design.md](docs/superpowers/specs/2026-10-06-original-reviewer-design.md)
 
-The repository is the product. Implementation starts after that spec is approved.
+**Implementation plan:** [docs/superpowers/plans/2026-10-06-original-reviewer-core.md](docs/superpowers/plans/2026-10-06-original-reviewer-core.md)
