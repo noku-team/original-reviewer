@@ -14,7 +14,7 @@ function splitRepo(repo: string): { owner: string; name: string } {
 
 async function installationOctokit(repo: string) {
   const appId = process.env.GITHUB_APP_ID;
-  const privateKey = process.env.GITHUB_PRIVATE_KEY;
+  const privateKey = process.env.GITHUB_PRIVATE_KEY?.replaceAll("\\n", "\n");
   if (!appId || !privateKey) throw new Error("not implemented");
   const app = new App({ appId, privateKey });
   const { owner, name } = splitRepo(repo);
