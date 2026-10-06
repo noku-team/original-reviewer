@@ -11,6 +11,9 @@ export type ReviewJob = {
   defaultBranch: string;
   fromCommand?: boolean;
   full?: boolean;
+  paused?: boolean;
+  draft?: boolean;
+  description?: string;
 };
 
 export type IndexJob = {
@@ -26,6 +29,7 @@ export type JobQueue = {
   enqueue(job: Job): Promise<void>;
   take(): Promise<Job | undefined>;
   cancelReview(repo: string, pr: number, exceptSha: string): Promise<number>;
+  isCurrentReview(repo: string, pr: number, sha: string): Promise<boolean>;
 };
 
 function reviewKey(repo: string, pr: number): string {
@@ -55,6 +59,10 @@ export function memoryQueue(): JobQueue {
         if (job && isSupersededReview(job, repo, pr, exceptSha)) jobs.splice(i, 1);
       }
       return before - jobs.length;
+    },
+    async isCurrentReview(repo, pr, sha) {
+      const current = currentSha.get(reviewKey(repo, pr));
+      return current === undefined || current === sha;
     },
   };
 }
@@ -97,6 +105,10 @@ export function redisQueue(url: string): JobQueue {
       await redis.del(listKey);
       if (keep.length > 0) await redis.rpush(listKey, ...keep);
       return dropped;
+    },
+    async isCurrentReview(repo, pr, sha) {
+      const current = await redis.get(`review:${repo}:${pr}:sha`);
+      return current === null || current === sha;
     },
   };
 }
