@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+.superpowers/
+.worktrees/
+graphify-out/
+*.log
+.env
+.env.*
