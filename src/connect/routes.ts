@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Hono } from "hono";
-import { saveCredential, savePkce, takePkce } from "./store.ts";
+import { getCredential, saveCredential, savePkce, takePkce } from "./store.ts";
 
 export type ConnectOpts = { fetch?: typeof fetch | undefined };
 
@@ -17,15 +17,31 @@ function pkcePair(): { verifier: string; challenge: string } {
 export function mountConnect(app: Hono, opts: ConnectOpts = {}): void {
   const doFetch = opts.fetch ?? fetch;
 
-  app.get("/", (c) => c.text(
-    [
-      "Original Reviewer",
-      "",
-      "Install the GitHub App on a repository, then connect an Original account.",
-      "Self-host: set ORIGINAL_API_KEY and skip /connect.",
-      "Hosted: visit /connect/original?installation_id=<id>",
-    ].join("\n"),
-  ));
+  app.get("/", (c) => {
+    const connected = c.req.query("connected");
+    const installationId = connected ? Number(connected) : Number.NaN;
+    if (Number.isInteger(installationId) && getCredential(installationId)) {
+      const slug = process.env.GITHUB_APP_SLUG ?? "original-reviewer";
+      return c.text(
+        [
+          "Original Reviewer",
+          "",
+          `Original is connected for GitHub installation ${installationId}.`,
+          "You can close this tab.",
+          `Open a pull request, or comment @${slug} review.`,
+        ].join("\n"),
+      );
+    }
+    return c.text(
+      [
+        "Original Reviewer",
+        "",
+        "Install the GitHub App on a repository, then connect an Original account.",
+        "Self-host: set ORIGINAL_API_KEY and skip /connect.",
+        "Hosted: visit /connect/original?installation_id=<id>",
+      ].join("\n"),
+    );
+  });
 
   app.get("/connect/original", (c) => {
     if (selfHost()) return c.body("not found", 404);
@@ -81,6 +97,6 @@ export function mountConnect(app: Hono, opts: ConnectOpts = {}): void {
       : undefined;
     if (typeof token !== "string") return c.body("token exchange failed", 502);
     saveCredential(installationId, token);
-    return c.redirect("/", 302);
+    return c.redirect(`/?connected=${installationId}`, 302);
   });
 }

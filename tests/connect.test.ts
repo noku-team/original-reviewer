@@ -63,8 +63,10 @@ describe("connect routes", () => {
     await app.request("/connect/original?installation_id=1");
     const res = await app.request("/connect/callback?state=1&code=x");
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/");
+    expect(res.headers.get("location")).toBe("/?connected=1");
     expect(getCredential(1)).toBe("tok-1");
+    const home = await app.request("/?connected=1");
+    expect(await home.text()).toContain("Original is connected for GitHub installation 1");
     expect(fetchMock).toHaveBeenCalledOnce();
     const posted = JSON.stringify(fetchMock.mock.calls);
     expect(posted).toContain("grant_type=authorization_code");
