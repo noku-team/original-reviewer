@@ -84,10 +84,9 @@ function header(input: AssembleInput): string {
   if (input.mode === "first") {
     return `## Review skill\n\n${input.skill}\n\n## Pull request diff\n\n`;
   }
-  const findings =
-    input.previousFindings === undefined
-      ? ""
-      : `## Previous findings\n\n${JSON.stringify(input.previousFindings)}\n\n`;
+  const findings = input.previousFindings === undefined
+    ? ""
+    : `## Previous findings\n\n${JSON.stringify(input.previousFindings)}\n\n`;
   return `${findings}## Pull request diff\n\n`;
 }
 

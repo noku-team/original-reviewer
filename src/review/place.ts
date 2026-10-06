@@ -23,7 +23,7 @@ function anchorsFromDiff(diff: string): Set<string> {
       path = line.slice(6);
       continue;
     }
-    const hunk = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)/);
+    const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(line);
     if (hunk) {
       oldLine = Number(hunk[1]);
       newLine = Number(hunk[2]);

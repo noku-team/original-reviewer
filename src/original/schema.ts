@@ -52,7 +52,7 @@ function fromOpenResponses(value: unknown): Review | undefined {
     }
   }
   if (texts.length === 0) return undefined;
-  return asReview(JSON.parse(texts[texts.length - 1] as string));
+  return asReview(JSON.parse(texts[texts.length - 1]!));
 }
 
 export function parseReview(outputText: string): Review {

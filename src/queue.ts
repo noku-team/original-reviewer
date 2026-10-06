@@ -72,7 +72,7 @@ function parseJob(raw: string): Job {
   if (typeof value !== "object" || value === null || !("kind" in value)) {
     throw new Error("invalid job json");
   }
-  const kind = (value as { kind: unknown }).kind;
+  const { kind } = (value);
   if (kind !== "review" && kind !== "index") throw new Error("invalid job kind");
   return value as Job;
 }

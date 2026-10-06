@@ -4,7 +4,7 @@ export function loadEnv(): {
   originalApiBase: string;
   originalBotId: string;
   messageBudget: number;
-} {
+  } {
   return {
     webhookSecret: process.env.GITHUB_WEBHOOK_SECRET ?? "",
     githubAppSlug: process.env.GITHUB_APP_SLUG ?? "original-reviewer",

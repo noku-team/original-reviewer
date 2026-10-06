@@ -19,7 +19,7 @@ function placed(over: Partial<Placed> = {}): Placed {
 }
 
 function fake(opts?: {
-  reviews?: Array<{ status: number; body: string }>;
+  reviews?: { status: number; body: string }[];
 }): {
   host: GitHost;
   reviews: GitHost["createReview"] extends (...a: infer A) => unknown ? A[0][] : never;

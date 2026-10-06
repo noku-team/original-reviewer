@@ -49,7 +49,7 @@ export async function publishReview(opts: {
     }),
   });
   const check = opts.placed.event === "REQUEST_CHANGES" ? "failure" : "success";
-  let summary = opts.placed.summary;
+  let { summary } = opts.placed;
   if (!opts.graphPersisted) summary += "\nGraph was not persisted.";
   await opts.host.setCheckRun({
     repo: opts.repo,

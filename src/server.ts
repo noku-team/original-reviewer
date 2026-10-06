@@ -1,12 +1,9 @@
 import { execFile } from "node:child_process";
-import { readFile, mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-
-const exec = promisify(execFile);
-import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { mountConnect } from "./connect/routes.ts";
 import { loadEnv } from "./env.ts";
@@ -18,6 +15,8 @@ import { verifyGitHubSignature } from "./github/verify-webhook.ts";
 import { parseCommand } from "./review/commands.ts";
 import { originalAuthFor, runJob } from "./review/run.ts";
 import { memoryQueue, redisQueue, type Job, type JobQueue, type ReviewJob } from "./queue.ts";
+
+const exec = promisify(execFile);
 
 export type PullRef = { sha: string; baseSha: string; forkRepo?: string };
 
@@ -101,7 +100,7 @@ export function createApp(deps: AppDeps): Hono {
 }
 
 export function listen(app: Hono, port = 3000): void {
-  serve({ fetch: app.fetch, port });
+  Bun.serve({ fetch: app.fetch, port });
 }
 
 async function handleEvent(
@@ -125,9 +124,8 @@ async function handleEvent(
       return;
     case "check_run":
       await enqueueRerequest(body, deps, paused);
-      return;
+
     default:
-      return;
   }
 }
 
@@ -162,8 +160,7 @@ async function enqueuePullRequest(
   const baseSha = base ? str(base.sha) : undefined;
   if (number === undefined || !sha || !baseSha) return;
   const headRepo = head && isRecord(head.repo) ? str(head.repo.full_name) : undefined;
-  const defaultBranch =
-    (isRecord(body.repository) ? str(body.repository.default_branch) : undefined) ?? "main";
+  const defaultBranch = (isRecord(body.repository) ? str(body.repository.default_branch) : undefined) ?? "main";
   const job: ReviewJob = {
     kind: "review",
     installationId: inst,
@@ -262,7 +259,7 @@ async function enqueueRerequest(
   const sha = str(check.head_sha);
   const pr = first ? num(first.number) : undefined;
   if (!repo || inst === undefined || !sha || pr === undefined) return;
-  void paused;
+  paused;
   const job: ReviewJob = {
     kind: "review",
     installationId: inst,

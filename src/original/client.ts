@@ -75,8 +75,8 @@ export function originalClient(opts: {
 
   return {
     async review(input) {
-      let messages = input.messages;
-      let conversationId = input.conversationId;
+      let { messages } = input;
+      let { conversationId } = input;
       let shrunk = false;
       for (;;) {
         try {

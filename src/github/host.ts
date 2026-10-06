@@ -27,12 +27,11 @@ async function installationOctokit(repo: string) {
 }
 
 export function githubHost(): GitHost {
-  void GRAPH_REF;
+  GRAPH_REF;
   return {
     clone: async (opts) => {
-      const token =
-        opts.token ||
-        (((await (await installationOctokit(opts.repo)).auth()) as { token?: string }).token ?? "");
+      const token = opts.token
+        || (((await (await installationOctokit(opts.repo)).auth()) as { token?: string }).token ?? "");
       const url = token
         ? `https://x-access-token:${token}@github.com/${opts.repo}.git`
         : `https://github.com/${opts.repo}.git`;
@@ -60,8 +59,8 @@ export function githubHost(): GitHost {
     createReview: async (opts) => {
       const octokit = await installationOctokit(opts.repo);
       const { owner, name } = splitRepo(opts.repo);
-      const event: ReviewEvent = opts.event;
-      const comments: ReviewComment[] | undefined = opts.comments;
+      const { event } = opts;
+      const { comments } = opts;
       const { status, data } = await octokit.request("POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews", {
         owner,
         repo: name,

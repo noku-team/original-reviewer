@@ -25,9 +25,7 @@ describe("connect routes", () => {
   it("stores the bearer from the OAuth callback", async () => {
     delete process.env.ORIGINAL_API_KEY;
     process.env.ORIGINAL_CONNECT_TOKEN_URL = "https://connect.example/token";
-    const fetchMock = vi.fn(async () =>
-      new Response(JSON.stringify({ access_token: "tok-1" }), { status: 200 }),
-    );
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ access_token: "tok-1" }), { status: 200 }));
     const app = createApp({
       queue: memoryQueue(),
       webhookSecret: "s",

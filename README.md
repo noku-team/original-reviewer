@@ -11,10 +11,13 @@ Open-source GitHub App for CodeRabbit-shaped pull request review. Inference runs
 ## Run
 
 ```bash
-npm install
-npm test
-npm run dev
+bun install
+bun test
+bun run lint
+bun run dev
 ```
+
+Requires [Bun](https://bun.sh) 1.3+. Tests still run through Vitest (`bun test` → `vitest run`) so CI never talks to GitHub or Original.
 
 ## Environment
 

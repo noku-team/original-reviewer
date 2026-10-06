@@ -1,13 +1,17 @@
 {
   "compilerOptions": {
     "strict": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node"]
+    "types": ["bun", "node"]
   },
   "include": ["src", "tests", "vitest.config.ts"]
 }

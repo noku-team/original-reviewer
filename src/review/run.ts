@@ -49,7 +49,7 @@ export async function originalAuthFor(installationId: number): Promise<AuthResul
 
 function nodeIds(graphJson: unknown): string[] {
   if (typeof graphJson !== "object" || graphJson === null) return [];
-  const nodes = (graphJson as { nodes?: unknown }).nodes;
+  const { nodes } = (graphJson as { nodes?: unknown });
   if (!Array.isArray(nodes)) return [];
   const ids: string[] = [];
   for (const node of nodes) {
@@ -199,8 +199,7 @@ export async function runJob(job: Job, deps: RunDeps): Promise<void> {
       messages: assembled.messages,
       conversationId: mode === "follow-up" ? marker?.conversationId : undefined,
       auth,
-      shrink: () =>
-        assembleContext({ ...assembleInput, graphJson: {}, guidelines: [] }).messages,
+      shrink: () => assembleContext({ ...assembleInput, graphJson: {}, guidelines: [] }).messages,
     });
     const placed = placeFindings({
       diff,
