@@ -1,4 +1,4 @@
-import { formatMarker, parseMarker } from "./marker.ts";
+import { formatMarker } from "./marker.ts";
 import type { GitHost, ReviewComment } from "../host.ts";
 import type { Placed } from "./place.ts";
 

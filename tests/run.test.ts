@@ -29,7 +29,9 @@ function reviewDoc(): string {
   });
 }
 
-function harness(over: Partial<RunDeps> & { authKind?: ReturnType<typeof originalAuthFor> extends Promise<infer T> ? T : never } = {}) {
+type AuthKind = Awaited<ReturnType<typeof originalAuthFor>>;
+
+function harness(over: Partial<RunDeps> & { authKind?: AuthKind } = {}) {
   const checks: Parameters<GitHost["setCheckRun"]>[0][] = [];
   const comments: string[] = [];
   const logs: string[] = [];

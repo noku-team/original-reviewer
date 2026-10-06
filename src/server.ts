@@ -55,10 +55,12 @@ export function createApp(deps: AppDeps): Hono {
   if (deps.runJob) {
     const run = deps.runJob;
     void (async () => {
-      for (;;) {
+      for (; ;) {
         const job = await deps.queue.take();
         if (!job) {
-          await new Promise((r) => setTimeout(r, 50));
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, 50);
+          });
           continue;
         }
         try {
@@ -124,8 +126,9 @@ async function handleEvent(
       return;
     case "check_run":
       await enqueueRerequest(body, deps, paused);
-
+      break;
     default:
+      break;
   }
 }
 
@@ -247,7 +250,7 @@ async function handleComment(
 async function enqueueRerequest(
   body: Record<string, unknown>,
   deps: AppDeps,
-  paused: Set<string>,
+  _paused: Set<string>,
 ): Promise<void> {
   if (str(body.action) !== "rerequested") return;
   const check = isRecord(body.check_run) ? body.check_run : undefined;
@@ -259,7 +262,6 @@ async function enqueueRerequest(
   const sha = str(check.head_sha);
   const pr = first ? num(first.number) : undefined;
   if (!repo || inst === undefined || !sha || pr === undefined) return;
-  paused;
   const job: ReviewJob = {
     kind: "review",
     installationId: inst,
@@ -303,7 +305,7 @@ export async function start(): Promise<void> {
         log: (msg) => {
           console.log(msg);
         },
-        workspace: async () => dir,
+        workspace: () => Promise.resolve(dir),
         cleanup: async (used) => {
           await rm(used, { recursive: true, force: true });
         },
@@ -330,7 +332,7 @@ export async function start(): Promise<void> {
           }
           return out;
         },
-        listIssueBodies: async () => [],
+        listIssueBodies: () => Promise.resolve([]),
         fetchGraph,
         pushGraph: async (used, remote) => {
           const url = remote.includes("://")

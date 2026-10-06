@@ -8,7 +8,7 @@ export const GRAPH_REF = "refs/original-reviewer/graph";
 function gitError(err: unknown): { code: unknown; stderr: string } {
   if (typeof err === "object" && err !== null) {
     const rec = err as { code?: unknown; stderr?: unknown };
-    return { code: rec.code, stderr: String(rec.stderr ?? "") };
+    return { code: rec.code, stderr: typeof rec.stderr === "string" ? rec.stderr : "" };
   }
   return { code: undefined, stderr: String(err) };
 }

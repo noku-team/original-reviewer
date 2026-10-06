@@ -44,25 +44,26 @@ export function memoryQueue(): JobQueue {
   const jobs: Job[] = [];
   const currentSha = new Map<string, string>();
   return {
-    async enqueue(job) {
+    enqueue(job) {
       jobs.push(job);
       if (job.kind === "review") currentSha.set(reviewKey(job.repo, job.pr), job.sha);
+      return Promise.resolve();
     },
-    async take() {
-      return jobs.shift();
+    take() {
+      return Promise.resolve(jobs.shift());
     },
-    async cancelReview(repo, pr, exceptSha) {
+    cancelReview(repo, pr, exceptSha) {
       currentSha.set(reviewKey(repo, pr), exceptSha);
       const before = jobs.length;
       for (let i = jobs.length - 1; i >= 0; i--) {
         const job = jobs[i];
         if (job && isSupersededReview(job, repo, pr, exceptSha)) jobs.splice(i, 1);
       }
-      return before - jobs.length;
+      return Promise.resolve(before - jobs.length);
     },
-    async isCurrentReview(repo, pr, sha) {
+    isCurrentReview(repo, pr, sha) {
       const current = currentSha.get(reviewKey(repo, pr));
-      return current === undefined || current === sha;
+      return Promise.resolve(current === undefined || current === sha);
     },
   };
 }

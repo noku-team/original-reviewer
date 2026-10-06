@@ -111,7 +111,7 @@ export function assembleContext(input: AssembleInput): AssembleResult {
   const firstRoom = Math.max(1, input.budget - bytes(prefix));
   const nextRoom = Math.max(1, input.budget - bytes(continued));
   const firstParts = splitUtf8(input.diff, firstRoom);
-  const messages = [prefix + firstParts[0]];
+  const messages = [prefix + (firstParts[0] ?? "")];
   const rest = firstParts.slice(1).join("");
   for (const part of splitUtf8(rest, nextRoom)) {
     if (part) messages.push(continued + part);

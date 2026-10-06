@@ -90,7 +90,7 @@ function stringList(value: unknown): string[] {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
     throw invalid("path_filters must be a string list");
   }
-  return value;
+  return value.filter((item): item is string => typeof item === "string");
 }
 
 function instructionList(value: unknown): { path: string; instructions: string }[] {

@@ -1,8 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { App } from "@octokit/app";
-import { GRAPH_REF } from "../graph/ref.ts";
-import type { GitHost, ReviewComment, ReviewEvent } from "../host.ts";
+import type { GitHost } from "../host.ts";
 import { parseMarker } from "../review/marker.ts";
 
 const exec = promisify(execFile);
@@ -27,7 +26,6 @@ async function installationOctokit(repo: string) {
 }
 
 export function githubHost(): GitHost {
-  GRAPH_REF;
   return {
     clone: async (opts) => {
       const token = opts.token
@@ -47,7 +45,7 @@ export function githubHost(): GitHost {
         repo: name,
         pull_number: opts.pr,
       });
-      const headRepo = data.head.repo?.full_name;
+      const headRepo = data.head.repo.full_name;
       return {
         sha: data.head.sha,
         baseSha: data.base.sha,

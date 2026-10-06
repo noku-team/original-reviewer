@@ -11,7 +11,7 @@ export function runGraphifyUpdate(dir: string): Promise<{ ok: boolean; skippedMi
   return new Promise((resolve) => {
     const child = spawn("graphify", ["update", "."], { cwd: dir, env: childEnv() });
     child.on("error", (err) => {
-      if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
+      if (typeof err === "object" && "code" in err && err.code === "ENOENT") {
         resolve({ ok: false, skippedMissing: true });
         return;
       }

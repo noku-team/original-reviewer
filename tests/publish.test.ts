@@ -58,7 +58,9 @@ describe("publishReview", () => {
       graphPersisted: true,
     });
     expect(reviews).toHaveLength(2);
-    expect(reviews[1]?.comments === undefined || reviews[1]?.comments?.length === 0).toBe(true);
+    const retry = reviews[1];
+    expect(retry).toBeDefined();
+    expect(retry?.comments === undefined || retry.comments.length === 0).toBe(true);
   });
 
   it("marks the check success for COMMENT and failure for REQUEST_CHANGES", async () => {

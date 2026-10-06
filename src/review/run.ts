@@ -36,15 +36,15 @@ export type RunDeps = {
   cleanup?: (dir: string) => Promise<void>;
 };
 
-export async function originalAuthFor(installationId: number): Promise<AuthResult> {
+export function originalAuthFor(installationId: number): Promise<AuthResult> {
   const key = process.env.ORIGINAL_API_KEY;
-  if (key) return { kind: "api-key", key };
+  if (key) return Promise.resolve({ kind: "api-key", key });
   if (process.env.ORIGINAL_CONNECT_AUTHORIZE_URL) {
     const token = getCredential(installationId);
-    if (!token) return { kind: "missing-hosted" };
-    return { kind: "bearer", token };
+    if (!token) return Promise.resolve({ kind: "missing-hosted" });
+    return Promise.resolve({ kind: "bearer", token });
   }
-  return { kind: "missing-selfhost" };
+  return Promise.resolve({ kind: "missing-selfhost" });
 }
 
 function nodeIds(graphJson: unknown): string[] {
