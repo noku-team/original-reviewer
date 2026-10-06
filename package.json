@@ -17,6 +17,7 @@
     "vitest": "^3.0.8"
   },
   "dependencies": {
+    "@octokit/app": "^16.1.4",
     "ioredis": "^6.0.0",
     "minimatch": "^10.2.6",
     "yaml": "^2.9.1"
