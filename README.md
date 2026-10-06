@@ -102,23 +102,69 @@ Never set `GEMINI_API_KEY` or `GOOGLE_API_KEY` on the worker. Graphify must stay
 
 ### 4. GitHub App
 
-Create an App at [github.com/settings/apps](https://github.com/settings/apps/new):
+Create it under the org (hosted) or your user (self-host):
 
-**Permissions**
+- Org: [github.com/organizations/noku-team/settings/apps/new](https://github.com/organizations/noku-team/settings/apps/new)
+- User: [github.com/settings/apps/new](https://github.com/settings/apps/new)
 
-| Permission | Access |
+The **GitHub App name** must be unique on GitHub. Prefer `Original Reviewer` so the mention handle is `@original-reviewer`. If that name is taken, use something like `Original Reviewer Noku` and set `GITHUB_APP_SLUG` to the slug in the App URL (`github.com/apps/<slug>`).
+
+Paste this into the form:
+
+| Field | Value |
 | --- | --- |
-| Contents | Read & write (clone + graph ref) |
-| Pull requests | Read & write |
-| Checks | Read & write |
-| Issues | Read & write (marker comment) |
+| **GitHub App name** | `Original Reviewer` |
+| **Homepage URL** | `https://github.com/noku-team/original-reviewer` |
+| **Callback URL** | leave empty (this slice uses installation tokens, not user OAuth) |
+| **Expire user authorization tokens** | default |
+| **Request user authorization (OAuth) during installation** | **off** |
+| **Setup URL** (hosted) | `https://<your-host>/connect/original` |
+| **Redirect on update** | on, if you set a Setup URL |
+| **Webhook** | **Active** |
+| **Webhook URL** | `https://<your-host>/github/webhooks` |
+| **Webhook secret** | `openssl rand -hex 32` → same value as `GITHUB_WEBHOOK_SECRET` |
+| **SSL verification** | Enable |
+| **Where can this GitHub App be installed?** | hosted: **Any account**. self-host/dev: **Only on this account** |
 
-**Events:** `pull_request`, `issue_comment`, `pull_request_review_comment`, `push`, `check_run`, `installation`, `installation_repositories`.
+**Description** (user-facing, paste as-is):
 
-**Webhook URL:** `https://<your-host>/github/webhooks`  
-**Webhook secret:** same value as `GITHUB_WEBHOOK_SECRET`.
+```
+Original Reviewer reviews pull requests with Original: a check run, a summary, and line-level comments.
 
-Install the App on a repository.
+Context comes from a persistent AST graph stored in your repository at refs/original-reviewer/graph — not a third-party code index. The graph is structural (no LLM). Your code is cloned for the job, then deleted. Inference is billed to the Original account you connect.
+
+Mention @original-reviewer review on a PR to run it by hand. Put @original-reviewer ignore in the PR body to skip auto-review.
+```
+
+**Repository permissions**
+
+| Permission | Access | Why |
+| --- | --- | --- |
+| Metadata | Read-only | Required by GitHub |
+| Contents | Read and write | Clone HEAD; push `refs/original-reviewer/graph` |
+| Pull requests | Read and write | Reviews and inline comments |
+| Checks | Read and write | Check run `original-reviewer` |
+| Issues | Read and write | Marker comment and `@original-reviewer` commands |
+
+Leave **Account** and **Organization** permissions at No access. Do not grant Workflows, Actions, or Merge queues.
+
+**Subscribe to events:** Check run, Installation, Installation repositories, Issue comment, Pull request, Pull request review comment, Push.
+
+Local webhook (dev): expose `http://localhost:3000` with Cloudflare Tunnel or ngrok, then put that origin in Webhook URL and Setup URL.
+
+```bash
+cloudflared tunnel --url http://localhost:3000
+# Webhook URL: https://<tunnel>/github/webhooks
+```
+
+After **Create GitHub App**:
+
+1. Copy **App ID** → `GITHUB_APP_ID`.
+2. Copy the slug from the URL → `GITHUB_APP_SLUG` (default `original-reviewer`).
+3. **Generate a private key**, download the `.pem`, paste the full PEM into `GITHUB_PRIVATE_KEY` (quoted, multiline is fine in `.env`).
+4. Confirm the webhook secret matches `.env`.
+5. **Install** the App on a test repository (Repository permissions → Install).
+6. Hosted: GitHub sends you to the Setup URL with `installation_id`; or open `/connect/original?installation_id=<id>`. Self-host: set `ORIGINAL_API_KEY` and skip Connect.
 
 ### 5. Run
 
