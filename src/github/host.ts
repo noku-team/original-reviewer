@@ -6,6 +6,28 @@ import { parseMarker } from "../review/marker.ts";
 
 const exec = promisify(execFile);
 
+export async function checkoutPull(opts: {
+  url: string;
+  dir: string;
+  sha: string;
+  baseSha?: string | undefined;
+}): Promise<void> {
+  await exec("git", ["clone", "--no-checkout", opts.url, opts.dir]);
+  await exec("git", ["-C", opts.dir, "fetch", "origin", `+${opts.sha}:refs/or-job/head`]);
+  if (opts.baseSha && opts.baseSha !== opts.sha) {
+    await exec("git", ["-C", opts.dir, "fetch", "origin", `+${opts.baseSha}:refs/or-job/base`]);
+  }
+  await exec("git", ["-C", opts.dir, "checkout", "--force", opts.sha]);
+}
+
+export async function pullDiff(dir: string, baseSha: string, sha: string): Promise<string> {
+  try {
+    return (await exec("git", ["-C", dir, "diff", `${baseSha}...${sha}`])).stdout;
+  } catch {
+    return (await exec("git", ["-C", dir, "diff", baseSha, sha])).stdout;
+  }
+}
+
 function splitRepo(repo: string): { owner: string; name: string } {
   const [owner, name] = repo.split("/");
   if (!owner || !name) throw new Error(`invalid repo ${repo}`);
@@ -37,9 +59,12 @@ export function githubHost(): GitHost {
       const url = token
         ? `https://x-access-token:${token}@github.com/${opts.repo}.git`
         : `https://github.com/${opts.repo}.git`;
-      await exec("git", ["clone", "--no-checkout", url, opts.dir]);
-      await exec("git", ["-C", opts.dir, "fetch", "--depth", "1", "origin", opts.sha]);
-      await exec("git", ["-C", opts.dir, "checkout", "--force", opts.sha]);
+      await checkoutPull({
+        url,
+        dir: opts.dir,
+        sha: opts.sha,
+        ...(opts.baseSha ? { baseSha: opts.baseSha } : {}),
+      });
     },
     getPull: async (opts) => {
       const octokit = await installationOctokit(opts.repo);

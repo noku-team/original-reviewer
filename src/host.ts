@@ -8,7 +8,13 @@ export type ReviewComment = {
 };
 
 export type GitHost = {
-  clone(opts: { repo: string; sha: string; dir: string; token: string }): Promise<void>;
+  clone(opts: {
+    repo: string;
+    sha: string;
+    dir: string;
+    token: string;
+    baseSha?: string | undefined;
+  }): Promise<void>;
   getPull(opts: { repo: string; pr: number }): Promise<{
     sha: string;
     baseSha: string;

@@ -1,22 +1,18 @@
-import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { promisify } from "node:util";
 import { Hono } from "hono";
 import { mountConnect } from "./connect/routes.ts";
 import { loadEnv } from "./env.ts";
 import { commitGraph, fetchGraph, pushGraph } from "./graph/ref.ts";
 import { runGraphifyUpdate } from "./graph/run.ts";
-import { githubHost } from "./github/host.ts";
+import { githubHost, pullDiff } from "./github/host.ts";
 import { originalClient } from "./original/client.ts";
 import { verifyGitHubSignature } from "./github/verify-webhook.ts";
 import { parseCommand } from "./review/commands.ts";
 import { originalAuthFor, runJob } from "./review/run.ts";
 import { memoryQueue, redisQueue, type Job, type JobQueue, type ReviewJob } from "./queue.ts";
-
-const exec = promisify(execFile);
 
 export type PullRef = { sha: string; baseSha: string; forkRepo?: string | undefined };
 
@@ -247,6 +243,19 @@ async function handleComment(
   }
 }
 
+function firstCheckPull(
+  body: Record<string, unknown>,
+  check: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  const fromCheck = Array.isArray(check.pull_requests) ? check.pull_requests.find(isRecord) : undefined;
+  if (fromCheck) return fromCheck;
+  const suite = isRecord(body.check_suite) ? body.check_suite : undefined;
+  const fromSuite = suite && Array.isArray(suite.pull_requests)
+    ? suite.pull_requests.find(isRecord)
+    : undefined;
+  return fromSuite;
+}
+
 async function enqueueRerequest(
   body: Record<string, unknown>,
   deps: AppDeps,
@@ -255,24 +264,33 @@ async function enqueueRerequest(
   if (str(body.action) !== "rerequested") return;
   const check = isRecord(body.check_run) ? body.check_run : undefined;
   if (!check || str(check.name) !== "original-reviewer") return;
-  const prs = Array.isArray(check.pull_requests) ? check.pull_requests : [];
-  const first = prs.find(isRecord);
+  const first = firstCheckPull(body, check);
   const repo = repoName(body);
   const inst = installationId(body);
-  const sha = str(check.head_sha);
   const pr = first ? num(first.number) : undefined;
-  if (!repo || inst === undefined || !sha || pr === undefined) return;
+  if (!first || !repo || inst === undefined || pr === undefined) return;
+
+  const payloadFork = isRecord(first.head) && isRecord(first.head.repo)
+    ? str(first.head.repo.full_name)
+    : undefined;
+  const resolved = deps.resolvePull ? await deps.resolvePull(repo, pr) : undefined;
+  const sha = resolved?.sha ?? str(check.head_sha);
+  const baseSha = resolved?.baseSha ?? (isRecord(first.base) ? str(first.base.sha) : undefined);
+  if (!sha || !baseSha) return;
+
   const job: ReviewJob = {
     kind: "review",
     installationId: inst,
     repo,
     pr,
     sha,
-    baseSha: "unknown",
+    baseSha,
     defaultBranch: "main",
     fromCommand: true,
     full: true,
   };
+  const fork = resolved?.forkRepo ?? (payloadFork && payloadFork !== repo ? payloadFork : undefined);
+  if (fork) job.forkRepo = fork;
   await deps.queue.cancelReview(repo, pr, sha);
   await deps.queue.enqueue(job);
 }
@@ -316,10 +334,7 @@ export async function start(): Promise<void> {
             return null;
           }
         },
-        getDiff: async (review, used) => {
-          const { stdout } = await exec("git", ["-C", used, "diff", `${review.baseSha}...${review.sha}`]);
-          return stdout;
-        },
+        getDiff: async (review, used) => pullDiff(used, review.baseSha, review.sha),
         listGuidelines: async (_job, used) => {
           const names = ["AGENTS.md", "CLAUDE.md", "GEMINI.md", ".cursorrules", "docs/reviewer/SKILL.md"];
           const out: { path: string; text: string }[] = [];

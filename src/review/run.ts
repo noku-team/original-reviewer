@@ -119,6 +119,7 @@ export async function runJob(job: Job, deps: RunDeps): Promise<void> {
       sha: job.sha,
       dir,
       token: "",
+      ...(job.baseSha && job.baseSha !== "unknown" ? { baseSha: job.baseSha } : {}),
     });
     await deps.fetchGraph(dir);
     await deps.runGraphifyUpdate(dir);

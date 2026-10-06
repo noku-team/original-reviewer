@@ -94,4 +94,45 @@ describe("createApp webhooks", () => {
       fromCommand: true,
     });
   });
+
+  it("resolves check_run.rerequested SHAs via resolvePull", async () => {
+    const queue = memoryQueue();
+    const payload = JSON.stringify({
+      action: "rerequested",
+      installation: { id: 9 },
+      repository: { full_name: "acme/app" },
+      check_run: {
+        name: "original-reviewer",
+        head_sha: "deadbeef",
+        pull_requests: [{
+          number: 3,
+          head: { sha: "deadbeef", repo: { full_name: "acme/app" } },
+          base: { sha: "stalebase", repo: { full_name: "acme/app" } },
+        }],
+      },
+    });
+    const app = createApp({
+      queue,
+      webhookSecret: secret,
+      slug: "original-reviewer",
+      resolvePull: async () => ({ sha: "abc123", baseSha: "def456" }),
+    });
+    const res = await app.request("/github/webhooks", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-hub-signature-256": sign(payload),
+        "x-github-event": "check_run",
+      },
+      body: payload,
+    });
+    expect(res.status).toBe(202);
+    expect(await queue.take()).toMatchObject({
+      kind: "review",
+      sha: "abc123",
+      baseSha: "def456",
+      fromCommand: true,
+      full: true,
+    });
+  });
 });
