@@ -14,6 +14,14 @@ function pkcePair(): { verifier: string; challenge: string } {
   return { verifier, challenge };
 }
 
+export function connectScope(): string {
+  const explicit = process.env.ORIGINAL_CONNECT_SCOPE;
+  const bot = process.env.ORIGINAL_BOT_ID;
+  const chat = bot ? `agent.chat:${bot}` : "agent.chat:";
+  if (!explicit || explicit.trim() === "openid") return `openid ${chat}`;
+  return explicit;
+}
+
 export function mountConnect(app: Hono, opts: ConnectOpts = {}): void {
   const doFetch = opts.fetch ?? fetch;
 
@@ -59,7 +67,7 @@ export function mountConnect(app: Hono, opts: ConnectOpts = {}): void {
     url.searchParams.set("response_type", "code");
     url.searchParams.set("client_id", clientId);
     url.searchParams.set("redirect_uri", redirectUri);
-    url.searchParams.set("scope", process.env.ORIGINAL_CONNECT_SCOPE ?? "openid");
+    url.searchParams.set("scope", connectScope());
     url.searchParams.set("state", installationId);
     url.searchParams.set("code_challenge", challenge);
     url.searchParams.set("code_challenge_method", "S256");

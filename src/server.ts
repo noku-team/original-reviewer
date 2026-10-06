@@ -212,6 +212,7 @@ async function handleComment(
   const pr = num(issue.number);
   if (!text || !repo || pr === undefined) return;
   const command = parseCommand(text, deps.slug);
+  console.log(`comment ${command.type} ${repo}#${pr}`);
   switch (command.type) {
     case "none":
       return;

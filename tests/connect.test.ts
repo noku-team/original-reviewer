@@ -49,6 +49,7 @@ describe("connect routes", () => {
     expect(loc.searchParams.get("state")).toBe("168555943");
     expect(loc.searchParams.get("code_challenge_method")).toBe("S256");
     expect(loc.searchParams.get("code_challenge")).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(loc.searchParams.get("scope") ?? "").toContain("agent.chat:");
   });
 
   it("stores the bearer from the OAuth callback", async () => {

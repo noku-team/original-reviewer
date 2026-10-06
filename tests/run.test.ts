@@ -80,6 +80,7 @@ afterEach(() => {
   clearCredentials();
   delete process.env.ORIGINAL_API_KEY;
   delete process.env.ORIGINAL_CONNECT_AUTHORIZE_URL;
+  delete process.env.ORIGINAL_CONNECT_REDIRECT_URI;
 });
 
 describe("runJob", () => {
@@ -95,6 +96,23 @@ describe("runJob", () => {
     await runJob(job(), deps);
     expect(checks.at(-1)?.conclusion).toBe("neutral");
     expect(comments.join("\n")).toMatch(/Connect/i);
+  });
+
+  it("comments on the PR when Original returns 401", async () => {
+    process.env.ORIGINAL_CONNECT_AUTHORIZE_URL = "https://ai.original.land/oauth/authorize";
+    process.env.ORIGINAL_CONNECT_REDIRECT_URI = "https://reviewer.example/connect/callback";
+    const fetchMock = vi.fn(async () => new Response("no", { status: 401 }));
+    const { deps, checks, comments } = harness({
+      original: originalClient({
+        baseUrl: "https://api.example",
+        botId: "bot",
+        fetch: fetchMock as unknown as typeof fetch,
+      }),
+    });
+    await runJob(job(), deps);
+    expect(comments.join("\n")).toMatch(/401/);
+    expect(comments.join("\n")).toContain("installation_id=1");
+    expect(checks.at(-1)?.conclusion).toBe("neutral");
   });
 
   it("pushes the graph to the base repo for a fork PR", async () => {

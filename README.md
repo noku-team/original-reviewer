@@ -95,6 +95,7 @@ Bun loads `.env` automatically. Fill the values:
 | `ORIGINAL_API_KEY` | self-host | disables `/connect/*` |
 | `ORIGINAL_CONNECT_AUTHORIZE_URL` | hosted | OAuth authorize |
 | `ORIGINAL_CONNECT_TOKEN_URL` | hosted | OAuth token exchange |
+| `ORIGINAL_CONNECT_SCOPE` | hosted | default `openid agent.chat:<bot id>` |
 | `PORT` | no | default `3000` |
 | `REDIS_URL` | no | queue + Connect tokens; memory (lost on restart) if unset |
 

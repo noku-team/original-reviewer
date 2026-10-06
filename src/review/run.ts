@@ -222,7 +222,21 @@ export async function runJob(job: Job, deps: RunDeps): Promise<void> {
   } catch (err) {
     const summary = err instanceof Error ? err.message : "review failed";
     deps.log(summary);
-    await failCheck(deps.host, job, "failure", summary);
+    const reconnect = summary === "original 401" && process.env.ORIGINAL_CONNECT_AUTHORIZE_URL;
+    const origin = process.env.ORIGINAL_CONNECT_REDIRECT_URI
+      ? new URL(process.env.ORIGINAL_CONNECT_REDIRECT_URI).origin
+      : undefined;
+    const connectHref = origin
+      ? `${origin}/connect/original?installation_id=${String(job.installationId)}`
+      : `/connect/original?installation_id=${String(job.installationId)}`;
+    await deps.host.upsertIssueComment({
+      repo: job.repo,
+      pr: job.pr,
+      body: reconnect
+        ? `Original rejected the Connect token (401). [Reconnect Original](${connectHref}), then comment \`@${deps.slug} review\`.`
+        : `Review failed: ${summary}`,
+    });
+    await failCheck(deps.host, job, reconnect ? "neutral" : "failure", summary);
   } finally {
     await deps.cleanup?.(dir);
   }
