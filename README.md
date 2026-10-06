@@ -126,15 +126,9 @@ Paste this into the form:
 | **SSL verification** | Enable |
 | **Where can this GitHub App be installed?** | hosted: **Any account**. self-host/dev: **Only on this account** |
 
-**Description** (user-facing, paste as-is):
+**Logo:** upload [`docs/brand/logo.png`](docs/brand/logo.png) as the App avatar (GitHub’s logo field, not the description).
 
-```
-Original Reviewer reviews pull requests with Original: a check run, a summary, and line-level comments.
-
-Context comes from a persistent AST graph stored in your repository at refs/original-reviewer/graph — not a third-party code index. The graph is structural (no LLM). Your code is cloned for the job, then deleted. Inference is billed to the Original account you connect.
-
-Mention @original-reviewer review on a PR to run it by hand. Put @original-reviewer ignore in the PR body to skip auto-review.
-```
+**Description:** paste [docs/github-app-description.md](docs/github-app-description.md). GitHub renders it as Markdown on the public App page.
 
 **Repository permissions**
 
