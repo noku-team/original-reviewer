@@ -1,5 +1,6 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import { mountConnect } from "./connect/routes.ts";
 import { verifyGitHubSignature } from "./github/verify-webhook.ts";
 import { parseCommand } from "./review/commands.ts";
 import type { Job, JobQueue, ReviewJob } from "./queue.ts";
@@ -9,6 +10,7 @@ export type AppDeps = {
   webhookSecret: string;
   slug: string;
   runJob?: (job: Job) => Promise<void>;
+  fetch?: typeof fetch;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -32,6 +34,7 @@ const REVIEW_ACTIONS = new Set(["opened", "synchronize", "reopened", "ready_for_
 export function createApp(deps: AppDeps): Hono {
   const paused = new Set<string>();
   const app = new Hono();
+  mountConnect(app, { fetch: deps.fetch });
 
   if (deps.runJob) {
     const run = deps.runJob;
