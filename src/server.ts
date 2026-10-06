@@ -234,8 +234,8 @@ async function handleComment(
         full: command.full,
         paused: false,
         description: str(issue.body) ?? "",
-        forkRepo: resolved.forkRepo,
       };
+      if (resolved.forkRepo) job.forkRepo = resolved.forkRepo;
       await deps.queue.cancelReview(repo, pr, job.sha);
       await deps.queue.enqueue(job);
       return;
