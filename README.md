@@ -8,23 +8,46 @@
 
 GitHub App for CodeRabbit-shaped pull request review. Inference runs on a public [Original](https://ai.original.land) agent. Context comes from a persistent graphify AST graph stored on `refs/original-reviewer/graph` — not a dump of the whole repo into the prompt.
 
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Author
+    participant GitHub
+    participant App as Original Reviewer
+    participant Graphify
+    participant Original
+
+    Author->>GitHub: open or push a PR
+    GitHub->>App: POST /github/webhooks
+    Note over App: HMAC check, then enqueue
+    App-->>GitHub: 202 Accepted
+    App->>GitHub: clone HEAD
+    App->>GitHub: fetch graph ref
+    App->>Graphify: graphify update .
+    Note over Graphify: AST only, no LLM
+    Graphify-->>App: graph.json
+    App->>App: assemble skill + diff + slice
+    App->>Original: POST /api/responses/v1/bot
+    Original-->>App: summary + findings
+    App->>GitHub: review + inline comments
+    App->>GitHub: check run original-reviewer
+    App->>GitHub: push graph ref
+    Note over App,GitHub: graph push failure does not fail the review
 ```
-GitHub webhook ──► queue ──► clone HEAD
-                               │
-                               ▼
-                         graphify update (AST only)
-                               │
-                               ▼
-                    assemble skill + diff + graph slice
-                               │
-                               ▼
-                    Original POST  /api/responses/v1/{bot}
-                               │
-                               ▼
-              review + inline comments + check run
-                               │
-                               ▼
-                    push graph ref (best-effort)
+
+```mermaid
+flowchart LR
+    GH((GitHub))
+    APP[Original Reviewer]
+    GY[graphify]
+    OA((Original))
+
+    GH -->|signed webhook| APP
+    APP -->|clone, review, check, graph ref| GH
+    APP -->|update .| GY
+    GY -->|graph.json| APP
+    APP -->|pr_review JSON| OA
+    OA -->|summary + findings| APP
 ```
 
 Same binary for hosted (Original Connect) and self-host (`ORIGINAL_API_KEY`).
