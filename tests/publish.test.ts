@@ -39,6 +39,7 @@ function fake(opts?: {
       return queue.shift() ?? { status: 200, body: "{}" };
     },
     upsertIssueComment: async () => undefined,
+    listIssueComments: async () => [],
     setCheckRun: async (payload) => {
       checks.push(payload);
     },

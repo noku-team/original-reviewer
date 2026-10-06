@@ -69,7 +69,11 @@ describe("createApp webhooks", () => {
       installation: { id: 9 },
       repository: { full_name: "acme/app" },
       issue: { number: 3, pull_request: { url: "https://api.github.com/repos/acme/app/pulls/3" }, body: "" },
-      comment: { body: "@original-reviewer review" },
+      comment: {
+        body: "@original-reviewer review",
+        user: { login: "alice", type: "User" },
+        author_association: "OWNER",
+      },
     });
     const app = createApp({
       queue,

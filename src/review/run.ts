@@ -1,4 +1,4 @@
-import { parseReviewerYaml } from "../config/yaml.ts";
+import { filterDiff, matchingPathInstructions, parseReviewerYaml } from "../config/yaml.ts";
 import { assembleContext } from "../graph/assemble.ts";
 import { loadEnv } from "../env.ts";
 import type { GitHost } from "../host.ts";
@@ -66,6 +66,14 @@ export function symbolsFromDiff(diff: string, graphJson: unknown): string[] {
   return nodeIds(graphJson).filter((id) => diff.includes(id));
 }
 
+export function publicError(message: string): string {
+  return message
+    .replace(/x-access-token:[^@\s]+/gi, "x-access-token:***")
+    .replace(/\bghs_[A-Za-z0-9]+/g, "ghs_***")
+    .replace(/Authorization: bearer \S+/gi, "Authorization: bearer ***")
+    .replace(/Bearer\s+\S+/gi, "Bearer ***");
+}
+
 async function failCheck(
   host: GitHost,
   job: ReviewJob,
@@ -77,7 +85,7 @@ async function failCheck(
     sha: job.sha,
     status: "completed",
     conclusion,
-    output: { title: "original-reviewer", summary },
+    output: { title: "original-reviewer", summary: publicError(summary) },
   });
 }
 
@@ -139,6 +147,7 @@ export async function runJob(job: Job, deps: RunDeps): Promise<void> {
       return;
     }
 
+    if (!config.autoReview.enabled && !job.fromCommand) return;
     if (job.draft && !config.autoReview.drafts) return;
     if (descriptionIgnoresAutoReview(job.description ?? "", deps.slug) && !job.fromCommand) {
       return;
@@ -181,9 +190,18 @@ export async function runJob(job: Job, deps: RunDeps): Promise<void> {
     const bodies = await deps.listIssueBodies(job);
     const marker = bodies.map(parseMarker).find((m) => m !== undefined);
     const mode = job.full || !marker?.conversationId ? "first" : "follow-up";
-    const diff = await deps.getDiff(job, dir);
+    const diff = filterDiff(await deps.getDiff(job, dir), config);
+    if (!diff.trim() && !job.fromCommand) {
+      await failCheck(deps.host, job, "success", "nothing to review after path filters");
+      return;
+    }
     const graphJson = await deps.readGraph(dir);
-    const guidelines = await deps.listGuidelines(job, dir);
+    const changedPaths = [...diff.matchAll(/^diff --git a\/.+ b\/(.+)$/gm)]
+      .flatMap((m) => (m[1] ? [m[1]] : []));
+    const guidelines = [
+      ...await deps.listGuidelines(job, dir),
+      ...matchingPathInstructions(config, changedPaths),
+    ];
     const assembleInput = {
       skill: deps.skill,
       diff,
@@ -196,7 +214,10 @@ export async function runJob(job: Job, deps: RunDeps): Promise<void> {
     } as const;
     const assembled = assembleContext(assembleInput);
 
-    if (!(await deps.queue.isCurrentReview(job.repo, job.pr, job.sha))) return;
+    if (!(await deps.queue.isCurrentReview(job.repo, job.pr, job.sha))) {
+      await failCheck(deps.host, job, "neutral", "superseded by a newer SHA");
+      return;
+    }
 
     const result = await deps.original.review({
       messages: assembled.messages,
@@ -220,7 +241,7 @@ export async function runJob(job: Job, deps: RunDeps): Promise<void> {
       graphPersisted,
     });
   } catch (err) {
-    const summary = err instanceof Error ? err.message : "review failed";
+    const summary = publicError(err instanceof Error ? err.message : "review failed");
     deps.log(summary);
     const reconnect = summary === "original 401" && process.env.ORIGINAL_CONNECT_AUTHORIZE_URL;
     const origin = process.env.ORIGINAL_CONNECT_REDIRECT_URI

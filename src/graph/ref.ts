@@ -16,6 +16,11 @@ function gitError(err: unknown): { code: unknown; stderr: string } {
 export async function fetchGraph(gitDir: string): Promise<{ found: boolean }> {
   try {
     await exec("git", ["-C", gitDir, "fetch", "origin", `${GRAPH_REF}:${GRAPH_REF}`]);
+    try {
+      await exec("git", ["-C", gitDir, "checkout", GRAPH_REF, "--", "graphify-out"]);
+    } catch {
+      // older graph commits stored graph.json at the root
+    }
     return { found: true };
   } catch (err) {
     const { code, stderr } = gitError(err);

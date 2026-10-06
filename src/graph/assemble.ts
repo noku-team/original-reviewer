@@ -95,8 +95,17 @@ function splitUtf8(text: string, limit: number): string[] {
   const raw = Buffer.from(text);
   if (raw.length <= limit) return [text];
   const parts: string[] = [];
-  for (let i = 0; i < raw.length; i += limit) {
-    parts.push(raw.subarray(i, i + limit).toString("utf8"));
+  let i = 0;
+  while (i < raw.length) {
+    let end = Math.min(i + limit, raw.length);
+    while (end > i && end < raw.length) {
+      const b = raw[end];
+      if (b === undefined || b < 0x80 || b >= 0xc0) break;
+      end -= 1;
+    }
+    if (end === i) end = Math.min(i + limit, raw.length);
+    parts.push(raw.subarray(i, end).toString("utf8"));
+    i = end;
   }
   return parts;
 }

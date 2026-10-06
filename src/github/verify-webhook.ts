@@ -5,6 +5,7 @@ export function verifyGitHubSignature(opts: {
   payload: string;
   signatureHeader: string | undefined;
 }): boolean {
+  if (!opts.secret) return false;
   const header = opts.signatureHeader;
   if (!header?.startsWith("sha256=")) return false;
   const digest = header.slice("sha256=".length);

@@ -3,15 +3,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Hono } from "hono";
-import { mountConnect } from "./connect/routes.ts";
-import { initCredentialStore } from "./connect/store.ts";
+import { connectScope, mountConnect } from "./connect/routes.ts";
+import { initCredentialStore, isPaused, setPaused } from "./connect/store.ts";
 import { loadEnv } from "./env.ts";
 import { commitGraph, fetchGraph, pushGraph } from "./graph/ref.ts";
 import { runGraphifyUpdate } from "./graph/run.ts";
 import { githubHost, pullDiff } from "./github/host.ts";
 import { originalClient } from "./original/client.ts";
 import { verifyGitHubSignature } from "./github/verify-webhook.ts";
-import { parseCommand } from "./review/commands.ts";
+import { commandAllowed, HELP_TEXT, parseCommand } from "./review/commands.ts";
 import { originalAuthFor, runJob } from "./review/run.ts";
 import { memoryQueue, redisQueue, type Job, type JobQueue, type ReviewJob } from "./queue.ts";
 
@@ -24,6 +24,7 @@ export type AppDeps = {
   runJob?: ((job: Job) => Promise<void>) | undefined;
   fetch?: typeof fetch | undefined;
   resolvePull?: ((repo: string, pr: number) => Promise<PullRef>) | undefined;
+  postComment?: ((repo: string, pr: number, body: string) => Promise<void>) | undefined;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -45,7 +46,6 @@ function bool(value: unknown): boolean {
 const REVIEW_ACTIONS = new Set(["opened", "synchronize", "reopened", "ready_for_review"]);
 
 export function createApp(deps: AppDeps): Hono {
-  const paused = new Set<string>();
   const app = new Hono();
   mountConnect(app, { fetch: deps.fetch });
 
@@ -95,7 +95,7 @@ export function createApp(deps: AppDeps): Hono {
     const repo = repoName(body);
     console.log(`webhook ${event}${action ? ` ${action}` : ""}${repo ? ` ${repo}` : ""}`);
     try {
-      await handleEvent(event, body, deps, paused);
+      await handleEvent(event, body, deps);
     } catch (err) {
       console.error("webhook handler failed", err instanceof Error ? err.message : "error");
     }
@@ -114,23 +114,22 @@ async function handleEvent(
   event: string,
   body: Record<string, unknown>,
   deps: AppDeps,
-  paused: Set<string>,
 ): Promise<void> {
   switch (event) {
     case "installation":
     case "installation_repositories":
       return;
     case "pull_request":
-      await enqueuePullRequest(body, deps, paused);
+      await enqueuePullRequest(body, deps);
       return;
     case "push":
       await enqueuePush(body, deps);
       return;
     case "issue_comment":
-      await handleComment(body, deps, paused);
+      await handleComment(body, deps);
       return;
     case "check_run":
-      await enqueueRerequest(body, deps, paused);
+      await enqueueRerequest(body, deps);
       break;
     default:
       break;
@@ -153,7 +152,6 @@ function repoName(body: Record<string, unknown>): string | undefined {
 async function enqueuePullRequest(
   body: Record<string, unknown>,
   deps: AppDeps,
-  paused: Set<string>,
 ): Promise<void> {
   const action = str(body.action);
   if (!action || !REVIEW_ACTIONS.has(action)) return;
@@ -179,7 +177,7 @@ async function enqueuePullRequest(
     defaultBranch,
     draft: bool(pr.draft),
     description: str(pr.body) ?? "",
-    paused: paused.has(pauseKey(repo, number)),
+    paused: await isPaused(pauseKey(repo, number)),
   };
   if (headRepo && headRepo !== repo) job.forkRepo = headRepo;
   await deps.queue.cancelReview(repo, number, sha);
@@ -201,7 +199,6 @@ async function enqueuePush(body: Record<string, unknown>, deps: AppDeps): Promis
 async function handleComment(
   body: Record<string, unknown>,
   deps: AppDeps,
-  paused: Set<string>,
 ): Promise<void> {
   if (str(body.action) !== "created") return;
   const issue = isRecord(body.issue) ? body.issue : undefined;
@@ -211,18 +208,32 @@ async function handleComment(
   const repo = repoName(body);
   const pr = num(issue.number);
   if (!text || !repo || pr === undefined) return;
+  const sender = isRecord(comment?.user) ? comment.user : undefined;
+  const issueUser = isRecord(issue.user) ? issue.user : undefined;
+  if (!commandAllowed({
+    senderLogin: str(sender?.login),
+    senderType: str(sender?.type),
+    authorAssociation: str(comment?.author_association),
+    issueAuthorLogin: str(issueUser?.login),
+    slug: deps.slug,
+  })) {
+    console.log(`comment ignored sender ${str(sender?.login) ?? "?"}`);
+    return;
+  }
   const command = parseCommand(text, deps.slug);
   console.log(`comment ${command.type} ${repo}#${pr}`);
   switch (command.type) {
     case "none":
       return;
     case "help":
+      if (deps.postComment) await deps.postComment(repo, pr, HELP_TEXT);
       return;
     case "pause":
-      paused.add(pauseKey(repo, pr));
+      await setPaused(pauseKey(repo, pr), true);
+      if (deps.postComment) await deps.postComment(repo, pr, "paused");
       return;
     case "resume":
-      paused.delete(pauseKey(repo, pr));
+      await setPaused(pauseKey(repo, pr), false);
       return;
     case "review": {
       const inst = installationId(body);
@@ -269,7 +280,6 @@ function firstCheckPull(
 async function enqueueRerequest(
   body: Record<string, unknown>,
   deps: AppDeps,
-  _paused: Set<string>,
 ): Promise<void> {
   if (str(body.action) !== "rerequested") return;
   const check = isRecord(body.check_run) ? body.check_run : undefined;
@@ -307,6 +317,7 @@ async function enqueueRerequest(
 
 export async function start(): Promise<void> {
   const env = loadEnv();
+  if (!env.webhookSecret) throw new Error("GITHUB_WEBHOOK_SECRET is required");
   const redisUrl = process.env.REDIS_URL;
   const credRedis = await initCredentialStore(redisUrl);
   if (redisUrl && !credRedis) {
@@ -326,6 +337,9 @@ export async function start(): Promise<void> {
     webhookSecret: env.webhookSecret,
     slug: env.githubAppSlug,
     resolvePull: async (repo, pr) => host.getPull({ repo, pr }),
+    postComment: async (repo, pr, body) => {
+      await host.upsertIssueComment({ repo, pr, body });
+    },
     runJob: async (job) => {
       const dir = await mkdtemp(join(tmpdir(), "or-"));
       await runJob(job, {
@@ -362,12 +376,10 @@ export async function start(): Promise<void> {
           }
           return out;
         },
-        listIssueBodies: () => Promise.resolve([]),
+        listIssueBodies: async (reviewJob) => host.listIssueComments({ repo: reviewJob.repo, pr: reviewJob.pr }),
         fetchGraph,
         pushGraph: async (used, remote) => {
-          const url = remote.includes("://")
-            ? remote
-            : `https://github.com/${remote}.git`;
+          const url = remote.includes("://") ? remote : `https://github.com/${remote}.git`;
           await pushGraph(used, url);
         },
         runGraphifyUpdate,
@@ -386,7 +398,7 @@ export async function start(): Promise<void> {
   listen(app, port);
   console.log(`queue ${redisUrl ? "redis" : "memory"}`);
   console.log(`credentials ${credRedis ? "redis" : "memory (lost on restart)"}`);
-  console.log(process.env.ORIGINAL_API_KEY ? "auth api-key" : "auth connect");
+  console.log(process.env.ORIGINAL_API_KEY ? "auth api-key" : `auth connect scope ${connectScope()}`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {

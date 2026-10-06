@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -63,6 +63,7 @@ describe("graph ref", () => {
     expect(await fetchGraph(clone)).toEqual({ found: true });
     const shown = await git(clone, "show", `${GRAPH_REF}:graphify-out/graph.json`);
     expect(shown.stdout).toContain("Zed");
+    expect(await readFile(join(clone, "graphify-out/graph.json"), "utf8")).toContain("Zed");
   });
 
   it("returns found false when the remote has no graph ref", async () => {

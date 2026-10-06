@@ -96,15 +96,13 @@ export function redisQueue(url: string): JobQueue {
     async cancelReview(repo, pr, exceptSha) {
       await redis.set(`review:${repo}:${pr}:sha`, exceptSha);
       const items = await redis.lrange(listKey, 0, -1);
-      const keep: string[] = [];
       let dropped = 0;
       for (const raw of items) {
         const job = parseJob(raw);
-        if (isSupersededReview(job, repo, pr, exceptSha)) dropped += 1;
-        else keep.push(raw);
+        if (isSupersededReview(job, repo, pr, exceptSha)) {
+          dropped += await redis.lrem(listKey, 1, raw);
+        }
       }
-      await redis.del(listKey);
-      if (keep.length > 0) await redis.rpush(listKey, ...keep);
       return dropped;
     },
     async isCurrentReview(repo, pr, sha) {

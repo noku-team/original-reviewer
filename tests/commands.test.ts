@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { descriptionIgnoresAutoReview, parseCommand } from "../src/review/commands.ts";
+import { commandAllowed, descriptionIgnoresAutoReview, parseCommand } from "../src/review/commands.ts";
 
 const slug = "original-reviewer";
 
@@ -30,5 +30,27 @@ describe("descriptionIgnoresAutoReview", () => {
   it("is true when the description mentions ignore", () => {
     expect(descriptionIgnoresAutoReview("WIP\n@original-reviewer ignore", slug)).toBe(true);
     expect(descriptionIgnoresAutoReview("please review", slug)).toBe(false);
+  });
+});
+
+describe("commandAllowed", () => {
+  it("allows the PR author and owners, and ignores the app bot", () => {
+    expect(commandAllowed({
+      senderLogin: "alice",
+      senderType: "User",
+      issueAuthorLogin: "alice",
+      slug,
+    })).toBe(true);
+    expect(commandAllowed({
+      senderLogin: "maintainer",
+      senderType: "User",
+      authorAssociation: "MEMBER",
+      slug,
+    })).toBe(true);
+    expect(commandAllowed({
+      senderLogin: "original-reviewer[bot]",
+      senderType: "Bot",
+      slug,
+    })).toBe(false);
   });
 });

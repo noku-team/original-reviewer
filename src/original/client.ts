@@ -32,9 +32,11 @@ export function originalClient(opts: {
   baseUrl: string;
   botId: string;
   fetch?: typeof fetch | undefined;
+  timeoutMs?: number | undefined;
 }): OriginalClient {
   const doFetch = opts.fetch ?? fetch;
   const url = `${opts.baseUrl.replace(/\/$/, "")}/api/responses/v1/${opts.botId}`;
+  const timeoutMs = opts.timeoutMs ?? 60_000;
 
   async function post(
     message: string,
@@ -43,21 +45,33 @@ export function originalClient(opts: {
   ): Promise<{ review: Review; conversationId?: string | undefined; status: number }> {
     let lastStatus = 0;
     for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 100 * 2 ** (attempt - 1));
+        });
+      }
       const headers: Record<string, string> = {
         "content-type": "application/json",
         ...authHeaders(auth),
       };
       if (conversationId) headers["X-Conversation-Id"] = conversationId;
+      const ac = new AbortController();
+      const timer = setTimeout(() => {
+        ac.abort();
+      }, timeoutMs);
       let response: Response;
       try {
         response = await doFetch(url, {
           method: "POST",
           headers,
           body: JSON.stringify(originalRequestBody(message)),
+          signal: ac.signal,
         });
       } catch {
         lastStatus = 0;
         continue;
+      } finally {
+        clearTimeout(timer);
       }
       lastStatus = response.status;
       if (response.status === 413) throw new Error("original 413");
@@ -76,6 +90,7 @@ export function originalClient(opts: {
   return {
     async review(input) {
       let { messages } = input;
+      const startConversation = input.conversationId;
       let { conversationId } = input;
       let shrunk = false;
       for (;;) {
@@ -96,6 +111,7 @@ export function originalClient(opts: {
         } catch (err) {
           if (err instanceof Error && err.message === "original 413" && !shrunk) {
             shrunk = true;
+            conversationId = startConversation;
             const next = input.shrink();
             if (!next) throw err;
             messages = next;

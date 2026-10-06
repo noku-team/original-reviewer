@@ -31,6 +31,7 @@ export type GitHost = {
     comments?: ReviewComment[] | undefined;
   }): Promise<{ status: number; body: string }>;
   upsertIssueComment(opts: { repo: string; pr: number; body: string }): Promise<void>;
+  listIssueComments(opts: { repo: string; pr: number }): Promise<string[]>;
   setCheckRun(opts: {
     repo: string;
     sha: string;

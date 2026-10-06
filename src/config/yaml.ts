@@ -116,3 +116,20 @@ export function isIgnoredPath(path: string, config: ReviewerConfig): boolean {
   if (includes.length > 0 && !includes.some((glob) => matches(path, glob))) return true;
   return false;
 }
+
+export function filterDiff(diff: string, config: ReviewerConfig): string {
+  return diff.split(/(?=^diff --git )/m).filter((chunk) => {
+    const match = /^diff --git a\/.+ b\/(.+)$/m.exec(chunk);
+    const path = match?.[1];
+    return !path || !isIgnoredPath(path, config);
+  }).join("");
+}
+
+export function matchingPathInstructions(
+  config: ReviewerConfig,
+  paths: string[],
+): { path: string; text: string }[] {
+  return config.pathInstructions
+    .filter((item) => paths.some((file) => matches(file, item.path)))
+    .map((item) => ({ path: item.path, text: item.instructions }));
+}

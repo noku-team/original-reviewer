@@ -31,6 +31,16 @@ describe("verifyGitHubSignature", () => {
     ).toBe(false);
   });
 
+  it("returns false when the HMAC secret is empty", () => {
+    expect(
+      verifyGitHubSignature({
+        secret: "",
+        payload,
+        signatureHeader: sha256Header(payload, ""),
+      }),
+    ).toBe(false);
+  });
+
   it("returns false when the header is missing", () => {
     expect(
       verifyGitHubSignature({

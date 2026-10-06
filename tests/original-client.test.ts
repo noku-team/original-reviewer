@@ -89,4 +89,27 @@ describe("originalClient", () => {
     ).rejects.toThrow();
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
+
+  it("aborts a hung fetch", async () => {
+    const fetchMock = vi.fn(
+      (_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(new DOMException("aborted", "AbortError"));
+        });
+      }),
+    );
+    const client = originalClient({
+      baseUrl: "https://api.example",
+      botId: "bot-1",
+      fetch: fetchMock as unknown as typeof fetch,
+      timeoutMs: 20,
+    });
+    await expect(
+      client.review({
+        messages: ["hello"],
+        auth: { kind: "api-key", key: "k" },
+        shrink: () => undefined,
+      }),
+    ).rejects.toThrow(/timeout/);
+  });
 });

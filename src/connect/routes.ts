@@ -16,10 +16,20 @@ function pkcePair(): { verifier: string; challenge: string } {
 
 export function connectScope(): string {
   const explicit = process.env.ORIGINAL_CONNECT_SCOPE;
-  const bot = process.env.ORIGINAL_BOT_ID;
-  const chat = bot ? `agent.chat:${bot}` : "agent.chat:";
-  if (!explicit || explicit.trim() === "openid") return `openid ${chat}`;
+  if (!explicit || explicit.trim() === "openid") return "openid agent.chat:";
   return explicit;
+}
+
+function tokenScope(token: string): string | undefined {
+  const parts = token.split(".");
+  const payloadB64 = parts[1];
+  if (parts.length !== 3 || !payloadB64) return undefined;
+  try {
+    const payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString()) as { scope?: unknown };
+    return typeof payload.scope === "string" ? payload.scope : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function mountConnect(app: Hono, opts: ConnectOpts = {}): void {
@@ -51,7 +61,7 @@ export function mountConnect(app: Hono, opts: ConnectOpts = {}): void {
     );
   });
 
-  app.get("/connect/original", (c) => {
+  app.get("/connect/original", async (c) => {
     if (selfHost()) return c.body("not found", 404);
     const authorize = process.env.ORIGINAL_CONNECT_AUTHORIZE_URL;
     const clientId = process.env.ORIGINAL_CONNECT_CLIENT_ID;
@@ -59,16 +69,20 @@ export function mountConnect(app: Hono, opts: ConnectOpts = {}): void {
     if (!authorize || !clientId || !redirectUri) {
       return c.body("connect is not configured", 501);
     }
-    const installationId = c.req.query("installation_id") ?? c.req.query("state") ?? "";
-    if (!installationId) return c.body("bad request", 400);
+    const installationRaw = c.req.query("installation_id") ?? "";
+    const installationId = Number(installationRaw);
+    if (!installationRaw || !Number.isInteger(installationId)) return c.body("bad request", 400);
     const { verifier, challenge } = pkcePair();
-    savePkce(installationId, verifier);
+    const state = randomBytes(16).toString("base64url");
+    await savePkce(state, { installationId, verifier });
     const url = new URL(authorize);
     url.searchParams.set("response_type", "code");
     url.searchParams.set("client_id", clientId);
     url.searchParams.set("redirect_uri", redirectUri);
-    url.searchParams.set("scope", connectScope());
-    url.searchParams.set("state", installationId);
+    const scope = connectScope();
+    url.searchParams.set("scope", scope);
+    url.searchParams.set("state", state);
+    console.log(`connect authorize scope ${scope}`);
     url.searchParams.set("code_challenge", challenge);
     url.searchParams.set("code_challenge_method", "S256");
     return c.redirect(url.toString(), 302);
@@ -84,10 +98,10 @@ export function mountConnect(app: Hono, opts: ConnectOpts = {}): void {
     }
     const state = c.req.query("state");
     const code = c.req.query("code");
-    const installationId = Number(state);
-    if (!code || !state || !Number.isInteger(installationId)) return c.body("bad request", 400);
-    const verifier = takePkce(state);
-    if (!verifier) return c.body("pkce verifier missing", 400);
+    if (!code || !state) return c.body("bad request", 400);
+    const pkce = await takePkce(state);
+    if (!pkce) return c.body("pkce verifier missing", 400);
+    const { installationId, verifier } = pkce;
     const response = await doFetch(tokenUrl, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -104,8 +118,12 @@ export function mountConnect(app: Hono, opts: ConnectOpts = {}): void {
       ? (parsed).access_token
       : undefined;
     if (typeof token !== "string") return c.body("token exchange failed", 502);
+    const granted = tokenScope(token);
+    if (!granted?.includes("agent.chat")) {
+      console.error(`connect token missing agent.chat (got ${granted ?? "unknown"}); Original API will 401`);
+    }
     await saveCredential(installationId, token);
-    console.log(`connect saved installation ${installationId}`);
+    console.log(`connect saved installation ${installationId} scope ${granted ?? "unknown"}`);
     return c.redirect(`https://github.com/settings/installations/${installationId}`, 302);
   });
 }

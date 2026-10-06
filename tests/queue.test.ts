@@ -31,7 +31,9 @@ describe("redisQueue", () => {
   it.skipIf(!process.env.REDIS_URL)(
     "drops superseded review jobs and yields only the current sha",
     async () => {
-      await cancelLeavesCurrentSha(redisQueue(process.env.REDIS_URL ?? ""));
+      const queue = redisQueue(process.env.REDIS_URL ?? "");
+      while (await queue.take()) { /* drain leftover jobs from other runs */ }
+      await cancelLeavesCurrentSha(queue);
     },
   );
 });

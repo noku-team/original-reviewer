@@ -44,6 +44,7 @@ function harness(over: Partial<RunDeps> & { authKind?: AuthKind } = {}) {
     upsertIssueComment: async (opts) => {
       comments.push(opts.body);
     },
+    listIssueComments: async () => [],
     setCheckRun: async (opts) => {
       checks.push(opts);
     },
@@ -89,6 +90,15 @@ describe("runJob", () => {
     await runJob(job({ draft: true }), deps);
     expect(fetchMock).toHaveBeenCalledTimes(0);
     expect(checks.some((c) => c.status === "in_progress")).toBe(false);
+  });
+
+  it("skips auto-review when enabled is false unless commanded", async () => {
+    const yaml = "reviews:\n  auto_review:\n    enabled: false\n";
+    const { deps, fetchMock } = harness({ readYaml: async () => yaml });
+    await runJob(job(), deps);
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+    await runJob(job({ fromCommand: true }), deps);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("sets a neutral check when hosted Original is missing", async () => {

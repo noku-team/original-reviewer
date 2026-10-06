@@ -46,7 +46,7 @@ describe("connect routes", () => {
     expect(loc.origin + loc.pathname).toBe("https://ai.original.land/oauth/authorize");
     expect(loc.searchParams.get("client_id")).toBe("oc_test");
     expect(loc.searchParams.get("response_type")).toBe("code");
-    expect(loc.searchParams.get("state")).toBe("168555943");
+    expect(loc.searchParams.get("state")).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(loc.searchParams.get("code_challenge_method")).toBe("S256");
     expect(loc.searchParams.get("code_challenge")).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(loc.searchParams.get("scope") ?? "").toContain("agent.chat:");
@@ -61,8 +61,9 @@ describe("connect routes", () => {
       slug: "original-reviewer",
       fetch: fetchMock as unknown as typeof fetch,
     });
-    await app.request("/connect/original?installation_id=1");
-    const res = await app.request("/connect/callback?state=1&code=x");
+    const start = await app.request("/connect/original?installation_id=1");
+    const state = new URL(start.headers.get("location") ?? "").searchParams.get("state");
+    const res = await app.request(`/connect/callback?state=${state ?? ""}&code=x`);
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe("https://github.com/settings/installations/1");
     expect(await getCredential(1)).toBe("tok-1");
