@@ -97,6 +97,6 @@ export function mountConnect(app: Hono, opts: ConnectOpts = {}): void {
       : undefined;
     if (typeof token !== "string") return c.body("token exchange failed", 502);
     saveCredential(installationId, token);
-    return c.redirect(`/?connected=${installationId}`, 302);
+    return c.redirect(`https://github.com/settings/installations/${installationId}`, 302);
   });
 }
