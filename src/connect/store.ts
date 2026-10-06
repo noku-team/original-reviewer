@@ -1,14 +1,39 @@
-// ponytail: in-memory Map as Task 13 specified. Lost on restart.
-// Upgrade: persist behind REDIS_URL the same way redisQueue does.
+import Redis from "ioredis";
+
+const HASH = "original-reviewer:credentials";
 const credentials = new Map<number, string>();
 const pkce = new Map<string, string>();
+let redis: Redis | undefined;
 
-export function saveCredential(installationId: number, token: string): void {
-  credentials.set(installationId, token);
+export async function initCredentialStore(url?: string): Promise<boolean> {
+  if (redis) {
+    redis.disconnect();
+    redis = undefined;
+  }
+  if (!url) return false;
+  const client = new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 1, connectTimeout: 2000 });
+  try {
+    await client.ping();
+    redis = client;
+    return true;
+  } catch {
+    client.disconnect();
+    return false;
+  }
 }
 
-export function getCredential(installationId: number): string | undefined {
-  return credentials.get(installationId);
+export async function saveCredential(installationId: number, token: string): Promise<void> {
+  credentials.set(installationId, token);
+  if (redis) await redis.hset(HASH, String(installationId), token);
+}
+
+export async function getCredential(installationId: number): Promise<string | undefined> {
+  const cached = credentials.get(installationId);
+  if (cached) return cached;
+  if (!redis) return undefined;
+  const token = await redis.hget(HASH, String(installationId));
+  if (token) credentials.set(installationId, token);
+  return token ?? undefined;
 }
 
 export function savePkce(state: string, verifier: string): void {

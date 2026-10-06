@@ -17,10 +17,10 @@ function pkcePair(): { verifier: string; challenge: string } {
 export function mountConnect(app: Hono, opts: ConnectOpts = {}): void {
   const doFetch = opts.fetch ?? fetch;
 
-  app.get("/", (c) => {
+  app.get("/", async (c) => {
     const connected = c.req.query("connected");
     const installationId = connected ? Number(connected) : Number.NaN;
-    if (Number.isInteger(installationId) && getCredential(installationId)) {
+    if (Number.isInteger(installationId) && await getCredential(installationId)) {
       const slug = process.env.GITHUB_APP_SLUG ?? "original-reviewer";
       return c.text(
         [
@@ -96,7 +96,8 @@ export function mountConnect(app: Hono, opts: ConnectOpts = {}): void {
       ? (parsed).access_token
       : undefined;
     if (typeof token !== "string") return c.body("token exchange failed", 502);
-    saveCredential(installationId, token);
+    await saveCredential(installationId, token);
+    console.log(`connect saved installation ${installationId}`);
     return c.redirect(`https://github.com/settings/installations/${installationId}`, 302);
   });
 }

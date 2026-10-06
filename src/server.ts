@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Hono } from "hono";
 import { mountConnect } from "./connect/routes.ts";
+import { initCredentialStore } from "./connect/store.ts";
 import { loadEnv } from "./env.ts";
 import { commitGraph, fetchGraph, pushGraph } from "./graph/ref.ts";
 import { runGraphifyUpdate } from "./graph/run.ts";
@@ -61,8 +62,8 @@ export function createApp(deps: AppDeps): Hono {
         }
         try {
           await run(job);
-        } catch {
-          // one bad job must not halt the queue
+        } catch (err) {
+          console.error("job failed", err instanceof Error ? err.message : "error");
         }
       }
     })();
@@ -75,21 +76,28 @@ export function createApp(deps: AppDeps): Hono {
       payload,
       signatureHeader: c.req.header("x-hub-signature-256"),
     });
-    if (!ok) return c.body("unauthorized", 401);
+    if (!ok) {
+      console.log("webhook rejected: bad signature");
+      return c.body("unauthorized", 401);
+    }
 
     const event = c.req.header("x-github-event") ?? "";
     let body: unknown;
     try {
       body = JSON.parse(payload) as unknown;
     } catch {
+      console.log(`webhook ${event} invalid json`);
       return c.body("accepted", 202);
     }
     if (!isRecord(body)) return c.body("accepted", 202);
 
+    const action = str(body.action);
+    const repo = repoName(body);
+    console.log(`webhook ${event}${action ? ` ${action}` : ""}${repo ? ` ${repo}` : ""}`);
     try {
       await handleEvent(event, body, deps, paused);
-    } catch {
-      // still 2xx after a valid signature
+    } catch (err) {
+      console.error("webhook handler failed", err instanceof Error ? err.message : "error");
     }
     return c.body("accepted", 202);
   });
@@ -99,6 +107,7 @@ export function createApp(deps: AppDeps): Hono {
 
 export function listen(app: Hono, port = 3000): void {
   Bun.serve({ fetch: app.fetch, port });
+  console.log(`listening on http://127.0.0.1:${port}`);
 }
 
 async function handleEvent(
@@ -297,7 +306,12 @@ async function enqueueRerequest(
 
 export async function start(): Promise<void> {
   const env = loadEnv();
-  const queue = process.env.REDIS_URL ? redisQueue(process.env.REDIS_URL) : memoryQueue();
+  const redisUrl = process.env.REDIS_URL;
+  const credRedis = await initCredentialStore(redisUrl);
+  if (redisUrl && !credRedis) {
+    console.error("redis unreachable; using memory queue and credentials");
+  }
+  const queue = credRedis && redisUrl ? redisQueue(redisUrl) : memoryQueue();
   const host = githubHost();
   const original = originalClient({ baseUrl: env.originalApiBase, botId: env.originalBotId });
   let skill = "";
@@ -367,7 +381,11 @@ export async function start(): Promise<void> {
       });
     },
   });
-  listen(app, Number(process.env.PORT ?? 3000));
+  const port = Number(process.env.PORT ?? 3000);
+  listen(app, port);
+  console.log(`queue ${redisUrl ? "redis" : "memory"}`);
+  console.log(`credentials ${credRedis ? "redis" : "memory (lost on restart)"}`);
+  console.log(process.env.ORIGINAL_API_KEY ? "auth api-key" : "auth connect");
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {

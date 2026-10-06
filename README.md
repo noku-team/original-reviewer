@@ -96,7 +96,7 @@ Bun loads `.env` automatically. Fill the values:
 | `ORIGINAL_CONNECT_AUTHORIZE_URL` | hosted | OAuth authorize |
 | `ORIGINAL_CONNECT_TOKEN_URL` | hosted | OAuth token exchange |
 | `PORT` | no | default `3000` |
-| `REDIS_URL` | no | in-memory queue if unset |
+| `REDIS_URL` | no | queue + Connect tokens; memory (lost on restart) if unset |
 
 Never set `GEMINI_API_KEY` or `GOOGLE_API_KEY` on the worker. Graphify must stay AST-only.
 

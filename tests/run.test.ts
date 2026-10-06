@@ -194,7 +194,7 @@ describe("originalAuthFor", () => {
     delete process.env.ORIGINAL_API_KEY;
     process.env.ORIGINAL_CONNECT_AUTHORIZE_URL = "https://connect.example";
     expect(await originalAuthFor(1)).toEqual({ kind: "missing-hosted" });
-    saveCredential(1, "tok");
+    await saveCredential(1, "tok");
     expect(await originalAuthFor(1)).toEqual({ kind: "bearer", token: "tok" });
   });
 });

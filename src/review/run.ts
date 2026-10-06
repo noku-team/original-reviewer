@@ -36,15 +36,15 @@ export type RunDeps = {
   cleanup?: ((dir: string) => Promise<void>) | undefined;
 };
 
-export function originalAuthFor(installationId: number): Promise<AuthResult> {
+export async function originalAuthFor(installationId: number): Promise<AuthResult> {
   const key = process.env.ORIGINAL_API_KEY;
-  if (key) return Promise.resolve({ kind: "api-key", key });
+  if (key) return { kind: "api-key", key };
   if (process.env.ORIGINAL_CONNECT_AUTHORIZE_URL) {
-    const token = getCredential(installationId);
-    if (!token) return Promise.resolve({ kind: "missing-hosted" });
-    return Promise.resolve({ kind: "bearer", token });
+    const token = await getCredential(installationId);
+    if (!token) return { kind: "missing-hosted" };
+    return { kind: "bearer", token };
   }
-  return Promise.resolve({ kind: "missing-selfhost" });
+  return { kind: "missing-selfhost" };
 }
 
 function nodeIds(graphJson: unknown): string[] {
@@ -98,6 +98,7 @@ async function persistGraph(
 
 export async function runJob(job: Job, deps: RunDeps): Promise<void> {
   if (job.kind === "index") {
+    deps.log(`index ${job.repo} ${job.sha.slice(0, 7)}`);
     const dir = await deps.workspace();
     try {
       await deps.host.clone({ repo: job.repo, sha: job.sha, dir, token: "" });
@@ -112,6 +113,7 @@ export async function runJob(job: Job, deps: RunDeps): Promise<void> {
 
   if (!(await deps.queue.isCurrentReview(job.repo, job.pr, job.sha))) return;
 
+  deps.log(`review ${job.repo}#${job.pr} ${job.sha.slice(0, 7)}`);
   const dir = await deps.workspace();
   try {
     await deps.host.clone({
@@ -219,6 +221,7 @@ export async function runJob(job: Job, deps: RunDeps): Promise<void> {
     });
   } catch (err) {
     const summary = err instanceof Error ? err.message : "review failed";
+    deps.log(summary);
     await failCheck(deps.host, job, "failure", summary);
   } finally {
     await deps.cleanup?.(dir);
