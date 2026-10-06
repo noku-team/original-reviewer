@@ -33,6 +33,7 @@ function fake(opts?: {
   ];
   const host: GitHost = {
     clone: async () => undefined,
+    getPull: async () => ({ sha: "abc", baseSha: "base", draft: false, description: "" }),
     createReview: async (payload) => {
       reviews.push(payload);
       return queue.shift() ?? { status: 200, body: "{}" };

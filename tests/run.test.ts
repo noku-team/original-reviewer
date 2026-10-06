@@ -37,6 +37,7 @@ function harness(over: Partial<RunDeps> & { authKind?: ReturnType<typeof origina
   const fetchMock = vi.fn(async () => new Response(reviewDoc(), { status: 200 }));
   const host: GitHost = {
     clone: async () => undefined,
+    getPull: async () => ({ sha: "bbb", baseSha: "base", draft: false, description: "" }),
     createReview: async () => ({ status: 200, body: "{}" }),
     upsertIssueComment: async (opts) => {
       comments.push(opts.body);
@@ -65,6 +66,9 @@ function harness(over: Partial<RunDeps> & { authKind?: ReturnType<typeof origina
       pushRemotes.push(remote);
     },
     runGraphifyUpdate: async () => ({ ok: true, skippedMissing: false }),
+    workspace: async () => "/tmp/or-job",
+    readGraph: async () => ({ nodes: [{ id: "Foo", label: "Foo" }], links: [] }),
+    commitGraph: async () => undefined,
     ...over,
   };
   return { deps, fetchMock, checks, comments, logs, pushRemotes, queue };
@@ -78,9 +82,10 @@ afterEach(() => {
 
 describe("runJob", () => {
   it("does not call Original for a draft when drafts are off", async () => {
-    const { deps, fetchMock } = harness();
+    const { deps, fetchMock, checks } = harness();
     await runJob(job({ draft: true }), deps);
     expect(fetchMock).toHaveBeenCalledTimes(0);
+    expect(checks.some((c) => c.status === "in_progress")).toBe(false);
   });
 
   it("sets a neutral check when hosted Original is missing", async () => {
@@ -115,12 +120,68 @@ describe("runJob", () => {
   });
 
   it("skips auto-review when the description ignores it", async () => {
-    const { deps, fetchMock } = harness();
+    const { deps, fetchMock, checks } = harness();
     await runJob(
       job({ description: "@original-reviewer ignore", fromCommand: false }),
       deps,
     );
     expect(fetchMock).toHaveBeenCalledTimes(0);
+    expect(checks.some((c) => c.status === "in_progress")).toBe(false);
+  });
+
+  it("fails the check when Original throws", async () => {
+    const { deps, checks } = harness({
+      original: {
+        review: async () => {
+          throw new Error("original 500");
+        },
+      },
+    });
+    await runJob(job(), deps);
+    expect(checks.at(-1)).toMatchObject({ status: "completed", conclusion: "failure" });
+  });
+
+  it("includes the graph slice in the Original payload", async () => {
+    const messages: string[] = [];
+    const { deps } = harness({
+      original: {
+        review: async (opts) => {
+          messages.push(...opts.messages);
+          return { review: { summary: "ok", findings: [] } };
+        },
+      },
+      getDiff: async () => "diff --git a/src/foo.ts b/src/foo.ts\n+++ b/src/foo.ts\n@@ -1 +1,2 @@\n export function Foo() {}\n",
+    });
+    await runJob(job(), deps);
+    expect(messages.join("\n")).toContain("Foo");
+    expect(messages.join("\n")).toContain("Graph slice");
+  });
+
+  it("clones into a per-job workspace, not cwd", async () => {
+    const dirs: string[] = [];
+    const { deps } = harness();
+    deps.host.clone = async (opts) => {
+      dirs.push(opts.dir);
+    };
+    await runJob(job(), deps);
+    expect(dirs[0]).toBeTruthy();
+    expect(dirs[0]).not.toBe(".");
+  });
+
+  it("shrinks extras after Original 413 and retries", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("too big", { status: 413 }))
+      .mockResolvedValueOnce(new Response(reviewDoc(), { status: 200 }));
+    const { deps } = harness({
+      original: originalClient({
+        baseUrl: "https://api.example",
+        botId: "bot",
+        fetch: fetchMock as unknown as typeof fetch,
+      }),
+    });
+    await runJob(job(), deps);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
 

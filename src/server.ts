@@ -1,9 +1,25 @@
+import { execFile } from "node:child_process";
+import { readFile, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { promisify } from "node:util";
+
+const exec = promisify(execFile);
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { mountConnect } from "./connect/routes.ts";
+import { loadEnv } from "./env.ts";
+import { commitGraph, fetchGraph, pushGraph } from "./graph/ref.ts";
+import { runGraphifyUpdate } from "./graph/run.ts";
+import { githubHost } from "./github/host.ts";
+import { originalClient } from "./original/client.ts";
 import { verifyGitHubSignature } from "./github/verify-webhook.ts";
 import { parseCommand } from "./review/commands.ts";
-import type { Job, JobQueue, ReviewJob } from "./queue.ts";
+import { originalAuthFor, runJob } from "./review/run.ts";
+import { memoryQueue, redisQueue, type Job, type JobQueue, type ReviewJob } from "./queue.ts";
+
+export type PullRef = { sha: string; baseSha: string; forkRepo?: string };
 
 export type AppDeps = {
   queue: JobQueue;
@@ -11,6 +27,7 @@ export type AppDeps = {
   slug: string;
   runJob?: (job: Job) => Promise<void>;
   fetch?: typeof fetch;
+  resolvePull?: (repo: string, pr: number) => Promise<PullRef>;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -45,7 +62,11 @@ export function createApp(deps: AppDeps): Hono {
           await new Promise((r) => setTimeout(r, 50));
           continue;
         }
-        await run(job);
+        try {
+          await run(job);
+        } catch {
+          // one bad job must not halt the queue
+        }
       }
     })();
   }
@@ -199,19 +220,21 @@ async function handleComment(
       return;
     case "review": {
       const inst = installationId(body);
-      if (inst === undefined) return;
+      if (inst === undefined || !deps.resolvePull) return;
+      const resolved = await deps.resolvePull(repo, pr);
       const job: ReviewJob = {
         kind: "review",
         installationId: inst,
         repo,
         pr,
-        sha: str(isRecord(issue.pull_request) ? issue.pull_request.head : undefined) ?? "HEAD",
-        baseSha: "unknown",
+        sha: resolved.sha,
+        baseSha: resolved.baseSha,
         defaultBranch: "main",
         fromCommand: true,
         full: command.full,
         paused: false,
         description: str(issue.body) ?? "",
+        forkRepo: resolved.forkRepo,
       };
       await deps.queue.cancelReview(repo, pr, job.sha);
       await deps.queue.enqueue(job);
@@ -253,4 +276,86 @@ async function enqueueRerequest(
   };
   await deps.queue.cancelReview(repo, pr, sha);
   await deps.queue.enqueue(job);
+}
+
+export async function start(): Promise<void> {
+  const env = loadEnv();
+  const queue = process.env.REDIS_URL ? redisQueue(process.env.REDIS_URL) : memoryQueue();
+  const host = githubHost();
+  const original = originalClient({ baseUrl: env.originalApiBase, botId: env.originalBotId });
+  let skill = "";
+  try {
+    skill = await readFile(new URL("../docs/reviewer/SKILL.md", import.meta.url), "utf8");
+  } catch {
+    skill = "";
+  }
+  const app = createApp({
+    queue,
+    webhookSecret: env.webhookSecret,
+    slug: env.githubAppSlug,
+    resolvePull: async (repo, pr) => host.getPull({ repo, pr }),
+    runJob: async (job) => {
+      const dir = await mkdtemp(join(tmpdir(), "or-"));
+      await runJob(job, {
+        host,
+        queue,
+        original,
+        originalAuthFor,
+        skill,
+        slug: env.githubAppSlug,
+        log: (msg) => {
+          console.log(msg);
+        },
+        workspace: async () => dir,
+        cleanup: async (used) => {
+          await rm(used, { recursive: true, force: true });
+        },
+        readYaml: async (_job, used) => {
+          try {
+            return await readFile(join(used, ".original-reviewer.yaml"), "utf8");
+          } catch {
+            return null;
+          }
+        },
+        getDiff: async (review, used) => {
+          const { stdout } = await exec("git", ["-C", used, "diff", `${review.baseSha}...${review.sha}`]);
+          return stdout;
+        },
+        listGuidelines: async (_job, used) => {
+          const names = ["AGENTS.md", "CLAUDE.md", "GEMINI.md", ".cursorrules", "docs/reviewer/SKILL.md"];
+          const out: { path: string; text: string }[] = [];
+          for (const name of names) {
+            try {
+              out.push({ path: name, text: await readFile(join(used, name), "utf8") });
+            } catch {
+              // missing guideline
+            }
+          }
+          return out;
+        },
+        listIssueBodies: async () => [],
+        fetchGraph,
+        pushGraph: async (used, remote) => {
+          const url = remote.includes("://")
+            ? remote
+            : `https://github.com/${remote}.git`;
+          await pushGraph(used, url);
+        },
+        runGraphifyUpdate,
+        readGraph: async (used) => {
+          try {
+            return JSON.parse(await readFile(join(used, "graphify-out/graph.json"), "utf8")) as unknown;
+          } catch {
+            return { nodes: [], links: [] };
+          }
+        },
+        commitGraph,
+      });
+    },
+  });
+  listen(app, Number(process.env.PORT ?? 3000));
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  void start();
 }

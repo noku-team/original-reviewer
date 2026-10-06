@@ -58,18 +58,26 @@ function sliceGraph(graphJson: unknown, changedSymbols: string[]): unknown {
   };
 }
 
-function extras(input: AssembleInput): string {
-  const parts: string[] = [];
-  const graph = sliceGraph(input.graphJson, input.changedSymbols);
-  const graphText = JSON.stringify(graph);
-  if (graphText && graphText !== '{"nodes":[],"links":[]}') {
-    parts.push(`## Graph slice\n\n${graphText}`);
-  }
+function extraChunks(input: AssembleInput): string[] {
+  const chunks: string[] = [];
   if (input.guidelines.length > 0) {
     const body = input.guidelines.map((g) => `### ${g.path}\n\n${g.text}`).join("\n\n");
-    parts.push(`## Guidelines\n\n${body}`);
+    chunks.push(`\n\n## Guidelines\n\n${body}`);
   }
-  return parts.length ? `\n\n${parts.join("\n\n")}` : "";
+  const graph = sliceGraph(input.graphJson, input.changedSymbols);
+  const graphText = JSON.stringify(graph);
+  if (graphText !== '{"nodes":[],"links":[]}') {
+    chunks.push(`\n\n## Graph slice\n\n${graphText}`);
+  }
+  return chunks;
+}
+
+function fitExtras(first: string, chunks: string[], budget: number): string {
+  let out = first;
+  for (const chunk of chunks) {
+    if (bytes(out + chunk) <= budget) out += chunk;
+  }
+  return out;
 }
 
 function header(input: AssembleInput): string {
@@ -98,9 +106,7 @@ export function assembleContext(input: AssembleInput): AssembleResult {
   const prefix = header(input);
   const continued = "## Pull request diff (continued)\n\n";
   if (bytes(input.diff) <= input.budget) {
-    let first = prefix + input.diff;
-    const extra = extras(input);
-    if (extra && bytes(first + extra) <= input.budget) first += extra;
+    const first = fitExtras(prefix + input.diff, extraChunks(input), input.budget);
     return { messages: [first] };
   }
   const firstRoom = Math.max(1, input.budget - bytes(prefix));

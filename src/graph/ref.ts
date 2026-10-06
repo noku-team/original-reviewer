@@ -26,6 +26,30 @@ export async function fetchGraph(gitDir: string): Promise<{ found: boolean }> {
   }
 }
 
+export async function commitGraph(gitDir: string): Promise<void> {
+  await exec("git", ["-C", gitDir, "add", "-A", "graphify-out"]);
+  try {
+    await exec("git", [
+      "-C",
+      gitDir,
+      "-c",
+      "user.email=original-reviewer@localhost",
+      "-c",
+      "user.name=original-reviewer",
+      "commit",
+      "-m",
+      "original-reviewer graph",
+    ]);
+  } catch (err) {
+    const { stderr } = gitError(err);
+    if (!/nothing to commit/i.test(stderr)) {
+      throw err instanceof Error ? err : new Error(String(err));
+    }
+  }
+  const { stdout } = await exec("git", ["-C", gitDir, "rev-parse", "HEAD"]);
+  await exec("git", ["-C", gitDir, "update-ref", GRAPH_REF, stdout.trim()]);
+}
+
 export async function pushGraph(gitDir: string, remote: string): Promise<void> {
   await exec("git", ["-C", gitDir, "push", "--force", remote, GRAPH_REF]);
 }

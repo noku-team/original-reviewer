@@ -1,7 +1,11 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { App } from "@octokit/app";
 import { GRAPH_REF } from "../graph/ref.ts";
 import type { GitHost, ReviewComment, ReviewEvent } from "../host.ts";
 import { parseMarker } from "../review/marker.ts";
+
+const exec = promisify(execFile);
 
 function splitRepo(repo: string): { owner: string; name: string } {
   const [owner, name] = repo.split("/");
@@ -25,8 +29,33 @@ async function installationOctokit(repo: string) {
 export function githubHost(): GitHost {
   void GRAPH_REF;
   return {
-    clone: async () => {
-      throw new Error("not implemented");
+    clone: async (opts) => {
+      const token =
+        opts.token ||
+        (((await (await installationOctokit(opts.repo)).auth()) as { token?: string }).token ?? "");
+      const url = token
+        ? `https://x-access-token:${token}@github.com/${opts.repo}.git`
+        : `https://github.com/${opts.repo}.git`;
+      await exec("git", ["clone", "--no-checkout", url, opts.dir]);
+      await exec("git", ["-C", opts.dir, "fetch", "--depth", "1", "origin", opts.sha]);
+      await exec("git", ["-C", opts.dir, "checkout", "--force", opts.sha]);
+    },
+    getPull: async (opts) => {
+      const octokit = await installationOctokit(opts.repo);
+      const { owner, name } = splitRepo(opts.repo);
+      const { data } = await octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
+        owner,
+        repo: name,
+        pull_number: opts.pr,
+      });
+      const headRepo = data.head.repo?.full_name;
+      return {
+        sha: data.head.sha,
+        baseSha: data.base.sha,
+        forkRepo: headRepo && headRepo !== opts.repo ? headRepo : undefined,
+        draft: Boolean(data.draft),
+        description: data.body ?? "",
+      };
     },
     createReview: async (opts) => {
       const octokit = await installationOctokit(opts.repo);

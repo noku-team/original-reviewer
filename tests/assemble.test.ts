@@ -35,6 +35,26 @@ describe("assembleContext", () => {
     expect(messages[0]).toContain(diff);
   });
 
+  it("keeps guidelines when the graph slice does not fit", () => {
+    const hugeGraph = {
+      nodes: [
+        { id: "Foo", label: "Foo" },
+        { id: "Bar", label: "B".repeat(400) },
+      ],
+      links: [{ source: "Foo", target: "Bar" }],
+    };
+    const { messages } = assembleContext({
+      ...base,
+      graphJson: hugeGraph,
+      guidelines: [{ path: "AGENTS.md", text: "Be kind." }],
+      budget: diff.length + 220,
+      mode: "first",
+    });
+    expect(messages[0]).toContain(diff);
+    expect(messages[0]).toContain("Be kind.");
+    expect(messages[0]).not.toContain("Bar");
+  });
+
   it("omits the review skill in follow-up mode", () => {
     const { messages } = assembleContext({
       ...base,

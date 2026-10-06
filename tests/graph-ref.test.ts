@@ -1,10 +1,10 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
-import { fetchGraph, GRAPH_REF, pushGraph } from "../src/graph/ref.ts";
+import { commitGraph, fetchGraph, GRAPH_REF, pushGraph } from "../src/graph/ref.ts";
 
 const exec = promisify(execFile);
 const dirs: string[] = [];
@@ -44,6 +44,25 @@ describe("graph ref", () => {
     expect(await fetchGraph(clone)).toEqual({ found: true });
     const shown = await git(clone, "show", `${GRAPH_REF}:graph.json`);
     expect(shown.stdout).toContain(payload);
+  });
+
+  it("commits graphify-out onto the graph ref before push", async () => {
+    const remote = await tmp("or-graph-commit-remote-");
+    await exec("git", ["init", "--bare", remote]);
+    const work = await tmp("or-graph-commit-work-");
+    await exec("git", ["clone", remote, work]);
+    await git(work, "config", "user.email", "test@example.com");
+    await git(work, "config", "user.name", "test");
+    const out = join(work, "graphify-out");
+    await mkdir(out, { recursive: true });
+    await writeFile(join(out, "graph.json"), '{"nodes":[{"id":"Zed"}]}');
+    await commitGraph(work);
+    await pushGraph(work, remote);
+    const clone = await tmp("or-graph-commit-clone-");
+    await exec("git", ["clone", remote, clone]);
+    expect(await fetchGraph(clone)).toEqual({ found: true });
+    const shown = await git(clone, "show", `${GRAPH_REF}:graphify-out/graph.json`);
+    expect(shown.stdout).toContain("Zed");
   });
 
   it("returns found false when the remote has no graph ref", async () => {
