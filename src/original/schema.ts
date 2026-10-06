@@ -4,7 +4,7 @@ export type Finding = {
   line: number;
   side: "LEFT" | "RIGHT";
   text: string;
-  suggested_fix?: string;
+  suggested_fix?: string | undefined;
 };
 
 export type Review = { summary: string; findings: Finding[] };

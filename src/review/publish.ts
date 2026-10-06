@@ -14,7 +14,7 @@ export async function publishReview(opts: {
   pr: number;
   sha: string;
   placed: Placed;
-  conversationId?: string;
+  conversationId?: string | undefined;
   graphPersisted: boolean;
 }): Promise<{ check: "success" | "failure" }> {
   const payload = {

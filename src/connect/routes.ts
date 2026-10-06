@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import { saveCredential } from "./store.ts";
 
-export type ConnectOpts = { fetch?: typeof fetch };
+export type ConnectOpts = { fetch?: typeof fetch | undefined };
 
 function selfHost(): boolean {
   return Boolean(process.env.ORIGINAL_API_KEY);

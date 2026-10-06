@@ -18,15 +18,15 @@ import { memoryQueue, redisQueue, type Job, type JobQueue, type ReviewJob } from
 
 const exec = promisify(execFile);
 
-export type PullRef = { sha: string; baseSha: string; forkRepo?: string };
+export type PullRef = { sha: string; baseSha: string; forkRepo?: string | undefined };
 
 export type AppDeps = {
   queue: JobQueue;
   webhookSecret: string;
   slug: string;
-  runJob?: (job: Job) => Promise<void>;
-  fetch?: typeof fetch;
-  resolvePull?: (repo: string, pr: number) => Promise<PullRef>;
+  runJob?: ((job: Job) => Promise<void>) | undefined;
+  fetch?: typeof fetch | undefined;
+  resolvePull?: ((repo: string, pr: number) => Promise<PullRef>) | undefined;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {

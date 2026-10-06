@@ -5,10 +5,10 @@ export type OriginalAuth = { kind: "api-key"; key: string } | { kind: "bearer"; 
 export type OriginalClient = {
   review(opts: {
     messages: string[];
-    conversationId?: string;
+    conversationId?: string | undefined;
     auth: OriginalAuth;
     shrink: () => string[] | undefined;
-  }): Promise<{ review: Review; conversationId?: string }>;
+  }): Promise<{ review: Review; conversationId?: string | undefined }>;
 };
 
 function authHeaders(auth: OriginalAuth): Record<string, string> {
@@ -31,7 +31,7 @@ function conversationFrom(headers: Headers): string | undefined {
 export function originalClient(opts: {
   baseUrl: string;
   botId: string;
-  fetch?: typeof fetch;
+  fetch?: typeof fetch | undefined;
 }): OriginalClient {
   const doFetch = opts.fetch ?? fetch;
   const url = `${opts.baseUrl.replace(/\/$/, "")}/api/responses/v1/${opts.botId}`;
@@ -40,7 +40,7 @@ export function originalClient(opts: {
     message: string,
     auth: OriginalAuth,
     conversationId: string | undefined,
-  ): Promise<{ review: Review; conversationId?: string; status: number }> {
+  ): Promise<{ review: Review; conversationId?: string | undefined; status: number }> {
     let lastStatus = 0;
     for (let attempt = 0; attempt < 3; attempt++) {
       const headers: Record<string, string> = {

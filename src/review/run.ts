@@ -33,7 +33,7 @@ export type RunDeps = {
   workspace: () => Promise<string>;
   readGraph: (dir: string) => Promise<unknown>;
   commitGraph: (dir: string) => Promise<void>;
-  cleanup?: (dir: string) => Promise<void>;
+  cleanup?: ((dir: string) => Promise<void>) | undefined;
 };
 
 export function originalAuthFor(installationId: number): Promise<AuthResult> {

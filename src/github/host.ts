@@ -49,7 +49,7 @@ export function githubHost(): GitHost {
       return {
         sha: data.head.sha,
         baseSha: data.base.sha,
-        forkRepo: headRepo && headRepo !== opts.repo ? headRepo : undefined,
+        ...(headRepo && headRepo !== opts.repo ? { forkRepo: headRepo } : {}),
         draft: Boolean(data.draft),
         description: data.body ?? "",
       };
@@ -66,12 +66,16 @@ export function githubHost(): GitHost {
         commit_id: opts.commitId,
         body: opts.body,
         event,
-        comments: comments?.map((c) => ({
-          path: c.path,
-          line: c.line,
-          side: c.side,
-          body: c.body,
-        })),
+        ...(comments === undefined
+          ? {}
+          : {
+            comments: comments.map((c) => ({
+              path: c.path,
+              line: c.line,
+              side: c.side,
+              body: c.body,
+            })),
+          }),
       });
       return { status, body: JSON.stringify(data) };
     },
@@ -110,8 +114,8 @@ export function githubHost(): GitHost {
         name: "original-reviewer",
         head_sha: opts.sha,
         status: opts.status,
-        conclusion: opts.conclusion,
-        output: opts.output,
+        ...(opts.conclusion === undefined ? {} : { conclusion: opts.conclusion }),
+        ...(opts.output === undefined ? {} : { output: opts.output }),
       });
     },
   };

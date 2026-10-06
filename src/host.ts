@@ -12,7 +12,7 @@ export type GitHost = {
   getPull(opts: { repo: string; pr: number }): Promise<{
     sha: string;
     baseSha: string;
-    forkRepo?: string;
+    forkRepo?: string | undefined;
     draft: boolean;
     description: string;
   }>;
@@ -22,14 +22,14 @@ export type GitHost = {
     commitId: string;
     body: string;
     event: ReviewEvent;
-    comments?: ReviewComment[];
+    comments?: ReviewComment[] | undefined;
   }): Promise<{ status: number; body: string }>;
   upsertIssueComment(opts: { repo: string; pr: number; body: string }): Promise<void>;
   setCheckRun(opts: {
     repo: string;
     sha: string;
     status: "queued" | "in_progress" | "completed";
-    conclusion?: "success" | "failure" | "neutral";
-    output?: { title: string; summary: string };
+    conclusion?: "success" | "failure" | "neutral" | undefined;
+    output?: { title: string; summary: string } | undefined;
   }): Promise<void>;
 };
