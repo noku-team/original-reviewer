@@ -28,8 +28,12 @@ async function installationOctokit(repo: string) {
 export function githubHost(): GitHost {
   return {
     clone: async (opts) => {
-      const token = opts.token
-        || (((await (await installationOctokit(opts.repo)).auth()) as { token?: string }).token ?? "");
+      let { token } = opts;
+      if (!token) {
+        const octokit = await installationOctokit(opts.repo);
+        const authed = await octokit.auth({ type: "installation" }) as { token?: string };
+        token = authed.token ?? "";
+      }
       const url = token
         ? `https://x-access-token:${token}@github.com/${opts.repo}.git`
         : `https://github.com/${opts.repo}.git`;
