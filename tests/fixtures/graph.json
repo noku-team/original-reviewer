@@ -1,0 +1,10 @@
+{
+  "directed": true,
+  "nodes": [
+    { "id": "Foo", "label": "Foo" },
+    { "id": "Bar", "label": "Bar" }
+  ],
+  "links": [
+    { "source": "Foo", "target": "Bar" }
+  ]
+}
