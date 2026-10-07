@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+package-lock.json
+.superpowers/
+.worktrees/
+graphify-out/
+*.log
+.env
+.env.*
+!.env.example
