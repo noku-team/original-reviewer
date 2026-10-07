@@ -12,13 +12,18 @@ export async function checkoutPull(opts: {
   sha: string;
   baseSha?: string | undefined;
   token?: string | undefined;
+  pr?: number | undefined;
 }): Promise<void> {
   const auth = opts.token ? ["-c", `http.extraHeader=Authorization: bearer ${opts.token}`] : [];
   await exec("git", [...auth, "clone", "--no-checkout", opts.url, opts.dir]);
   if (opts.token) {
     await exec("git", ["-C", opts.dir, "config", "http.extraHeader", `Authorization: bearer ${opts.token}`]);
   }
-  await exec("git", ["-C", opts.dir, "fetch", "origin", `+${opts.sha}:refs/or-job/head`]);
+  if (opts.pr !== undefined) {
+    await exec("git", ["-C", opts.dir, "fetch", "origin", `+refs/pull/${opts.pr}/head:refs/or-job/head`]);
+  } else {
+    await exec("git", ["-C", opts.dir, "fetch", "origin", `+${opts.sha}:refs/or-job/head`]);
+  }
   if (opts.baseSha && opts.baseSha !== opts.sha) {
     await exec("git", ["-C", opts.dir, "fetch", "origin", `+${opts.baseSha}:refs/or-job/base`]);
   }
@@ -77,6 +82,7 @@ export function githubHost(): GitHost {
         dir: opts.dir,
         sha: opts.sha,
         ...(opts.baseSha ? { baseSha: opts.baseSha } : {}),
+        ...(opts.pr !== undefined ? { pr: opts.pr } : {}),
         ...(token ? { token } : {}),
       });
     },

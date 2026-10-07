@@ -47,4 +47,30 @@ describe("checkoutPull + pullDiff", () => {
     expect(diff).toContain("-one");
     expect(diff).toContain("+two");
   });
+
+  it("fetches a fork SHA from refs/pull/N/head on the base remote", async () => {
+    const src = await tmp("or-clone-pr-src-");
+    await exec("git", ["init", "-b", "main", src]);
+    await git(src, "config", "user.email", "test@example.com");
+    await git(src, "config", "user.name", "test");
+    await writeFile(join(src, "f.txt"), "one\n");
+    await git(src, "add", "f.txt");
+    await git(src, "commit", "-m", "base");
+    const baseSha = (await git(src, "rev-parse", "HEAD")).stdout.trim();
+    await git(src, "checkout", "-b", "feature");
+    await writeFile(join(src, "f.txt"), "two\n");
+    await git(src, "add", "f.txt");
+    await git(src, "commit", "-m", "head");
+    const sha = (await git(src, "rev-parse", "HEAD")).stdout.trim();
+    await git(src, "update-ref", "refs/pull/7/head", sha);
+    await git(src, "checkout", "main");
+    await git(src, "branch", "-D", "feature");
+
+    const dest = await tmp("or-clone-pr-dest-");
+    await rm(dest, { recursive: true, force: true });
+    await checkoutPull({ url: src, dir: dest, sha, baseSha, pr: 7 });
+    const diff = await pullDiff(dest, baseSha, sha);
+    expect(diff).toContain("-one");
+    expect(diff).toContain("+two");
+  });
 });

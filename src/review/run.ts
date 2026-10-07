@@ -125,10 +125,11 @@ export async function runJob(job: Job, deps: RunDeps): Promise<void> {
   const dir = await deps.workspace();
   try {
     await deps.host.clone({
-      repo: job.forkRepo ?? job.repo,
+      repo: job.repo,
       sha: job.sha,
       dir,
       token: "",
+      pr: job.pr,
       ...(job.baseSha && job.baseSha !== "unknown" ? { baseSha: job.baseSha } : {}),
     });
     await deps.fetchGraph(dir);

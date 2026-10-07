@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { memoryQueue } from "../src/queue.ts";
-import { createApp } from "../src/server.ts";
+import { createApp, openQueue } from "../src/server.ts";
 
 const secret = "whsec";
 
@@ -138,5 +138,84 @@ describe("createApp webhooks", () => {
       fromCommand: true,
       full: true,
     });
+  });
+
+  it("returns 202 for invalid JSON after a valid signature", async () => {
+    const queue = memoryQueue();
+    const app = createApp({ queue, webhookSecret: secret, slug: "original-reviewer" });
+    const raw = "{not-json";
+    const res = await app.request("/github/webhooks", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-hub-signature-256": sign(raw),
+        "x-github-event": "pull_request",
+      },
+      body: raw,
+    });
+    expect(res.status).toBe(202);
+    expect(await queue.take()).toBeUndefined();
+  });
+
+  it("returns 500 when enqueue fails after a valid signature", async () => {
+    const queue = memoryQueue();
+    queue.enqueue = async () => {
+      throw new Error("redis down");
+    };
+    const app = createApp({ queue, webhookSecret: secret, slug: "original-reviewer" });
+    const res = await app.request("/github/webhooks", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-hub-signature-256": sign(syncPayload),
+        "x-github-event": "pull_request",
+      },
+      body: syncPayload,
+    });
+    expect(res.status).toBe(500);
+  });
+
+  it("enqueues a review command from pull_request_review_comment", async () => {
+    const queue = memoryQueue();
+    const payload = JSON.stringify({
+      action: "created",
+      installation: { id: 9 },
+      repository: { full_name: "acme/app" },
+      pull_request: {
+        number: 3,
+        body: "pr body",
+        user: { login: "alice" },
+      },
+      comment: {
+        body: "@original-reviewer review",
+        user: { login: "alice", type: "User" },
+        author_association: "OWNER",
+      },
+    });
+    const app = createApp({
+      queue,
+      webhookSecret: secret,
+      slug: "original-reviewer",
+      resolvePull: async () => ({ sha: "abc123", baseSha: "def456" }),
+    });
+    const res = await app.request("/github/webhooks", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-hub-signature-256": sign(payload),
+        "x-github-event": "pull_request_review_comment",
+      },
+      body: payload,
+    });
+    expect(res.status).toBe(202);
+    expect(await queue.take()).toMatchObject({
+      kind: "review",
+      sha: "abc123",
+      fromCommand: true,
+    });
+  });
+
+  it("fails when REDIS_URL is set and Redis is unreachable", async () => {
+    await expect(openQueue("redis://127.0.0.1:1")).rejects.toThrow(/unreachable/);
   });
 });

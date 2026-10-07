@@ -53,10 +53,16 @@ describe("graph ref", () => {
     await exec("git", ["clone", remote, work]);
     await git(work, "config", "user.email", "test@example.com");
     await git(work, "config", "user.name", "test");
+    await writeFile(join(work, "secret.ts"), "leaked");
+    await git(work, "add", "secret.ts");
+    await git(work, "commit", "-m", "head");
+    const head = (await git(work, "rev-parse", "HEAD")).stdout.trim();
     const out = join(work, "graphify-out");
     await mkdir(out, { recursive: true });
     await writeFile(join(out, "graph.json"), '{"nodes":[{"id":"Zed"}]}');
     await commitGraph(work);
+    expect((await git(work, "rev-parse", "HEAD")).stdout.trim()).toBe(head);
+    await expect(git(work, "cat-file", "-e", `${GRAPH_REF}:secret.ts`)).rejects.toThrow();
     await pushGraph(work, remote);
     const clone = await tmp("or-graph-commit-clone-");
     await exec("git", ["clone", remote, clone]);

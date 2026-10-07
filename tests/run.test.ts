@@ -36,9 +36,12 @@ function harness(over: Partial<RunDeps> & { authKind?: AuthKind } = {}) {
   const comments: string[] = [];
   const logs: string[] = [];
   const pushRemotes: string[] = [];
+  const clones: Parameters<GitHost["clone"]>[0][] = [];
   const fetchMock = vi.fn(async () => new Response(reviewDoc(), { status: 200 }));
   const host: GitHost = {
-    clone: async () => undefined,
+    clone: async (opts) => {
+      clones.push(opts);
+    },
     getPull: async () => ({ sha: "bbb", baseSha: "base", draft: false, description: "" }),
     createReview: async () => ({ status: 200, body: "{}" }),
     upsertIssueComment: async (opts) => {
@@ -74,7 +77,7 @@ function harness(over: Partial<RunDeps> & { authKind?: AuthKind } = {}) {
     commitGraph: async () => undefined,
     ...over,
   };
-  return { deps, fetchMock, checks, comments, logs, pushRemotes, queue };
+  return { deps, fetchMock, checks, comments, logs, pushRemotes, clones, queue };
 }
 
 afterEach(() => {
@@ -130,6 +133,12 @@ describe("runJob", () => {
     await runJob(job({ forkRepo: "alice/app", repo: "acme/app" }), deps);
     expect(pushRemotes).toContain("acme/app");
     expect(pushRemotes).not.toContain("alice/app");
+  });
+
+  it("clones the base repo via pull ref for a fork PR", async () => {
+    const { deps, clones } = harness();
+    await runJob(job({ forkRepo: "alice/app", repo: "acme/app", pr: 7 }), deps);
+    expect(clones[0]).toMatchObject({ repo: "acme/app", pr: 7, sha: "bbb" });
   });
 
   it("fails self-host without leaking ORIGINAL_API_KEY", async () => {

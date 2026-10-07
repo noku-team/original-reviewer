@@ -1,4 +1,6 @@
 import { execFile } from "node:child_process";
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
@@ -32,27 +34,32 @@ export async function fetchGraph(gitDir: string): Promise<{ found: boolean }> {
 }
 
 export async function commitGraph(gitDir: string): Promise<void> {
-  await exec("git", ["-C", gitDir, "add", "-A", "graphify-out"]);
+  const index = join(gitDir, ".git", "tmp-graph-index");
+  const env = { ...process.env, GIT_INDEX_FILE: index };
+  const gitIndex = (args: string[]) => exec("git", ["-C", gitDir, ...args], { env });
   try {
-    await exec("git", [
-      "-C",
-      gitDir,
-      "-c",
-      "user.email=original-reviewer@localhost",
-      "-c",
-      "user.name=original-reviewer",
-      "commit",
-      "-m",
-      "original-reviewer graph",
-    ]);
-  } catch (err) {
-    const { stderr } = gitError(err);
-    if (!/nothing to commit/i.test(stderr)) {
-      throw err instanceof Error ? err : new Error(String(err));
+    await gitIndex(["read-tree", "--empty"]);
+    await gitIndex(["add", "-A", "--", "graphify-out"]);
+    const tree = (await gitIndex(["write-tree"])).stdout.trim();
+    let parent: string | undefined;
+    try {
+      parent = (await exec("git", ["-C", gitDir, "rev-parse", GRAPH_REF])).stdout.trim();
+    } catch {
+      parent = undefined;
     }
+    if (parent) {
+      const oldTree = (await exec("git", ["-C", gitDir, "rev-parse", `${GRAPH_REF}^{tree}`])).stdout.trim();
+      if (oldTree === tree) return;
+    }
+    const ident = ["-c", "user.email=original-reviewer@localhost", "-c", "user.name=original-reviewer"];
+    const commitArgs = parent
+      ? [...ident, "commit-tree", tree, "-p", parent, "-m", "original-reviewer graph"]
+      : [...ident, "commit-tree", tree, "-m", "original-reviewer graph"];
+    const commit = (await exec("git", ["-C", gitDir, ...commitArgs])).stdout.trim();
+    await exec("git", ["-C", gitDir, "update-ref", GRAPH_REF, commit]);
+  } finally {
+    await rm(index, { force: true });
   }
-  const { stdout } = await exec("git", ["-C", gitDir, "rev-parse", "HEAD"]);
-  await exec("git", ["-C", gitDir, "update-ref", GRAPH_REF, stdout.trim()]);
 }
 
 export async function pushGraph(gitDir: string, remote: string): Promise<void> {

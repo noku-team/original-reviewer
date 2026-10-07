@@ -14,6 +14,7 @@ export type GitHost = {
     dir: string;
     token: string;
     baseSha?: string | undefined;
+    pr?: number | undefined;
   }): Promise<void>;
   getPull(opts: { repo: string; pr: number }): Promise<{
     sha: string;
