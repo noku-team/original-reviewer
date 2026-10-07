@@ -176,6 +176,15 @@ Listens on `PORT` (default 3000).
 
 Health copy is at `GET /`.
 
+### Container
+
+Image is Bun + git + graphify. Inject the same env as `.env.example` (k8s Secret / ConfigMap). Do not bake secrets. Probe `GET /` on `PORT`. Redis is optional but required if you run more than one replica.
+
+```bash
+docker build -t original-reviewer .
+docker run --rm -p 3000:3000 --env-file .env original-reviewer
+```
+
 ### 6. Repo under review
 
 Optional `.original-reviewer.yaml` at the **feature branch** root:

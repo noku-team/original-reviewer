@@ -106,8 +106,8 @@ export function createApp(deps: AppDeps): Hono {
 }
 
 export function listen(app: Hono, port = 3000): void {
-  Bun.serve({ fetch: app.fetch, port });
-  console.log(`listening on http://127.0.0.1:${port}`);
+  Bun.serve({ fetch: app.fetch, hostname: "0.0.0.0", port });
+  console.log(`listening on http://0.0.0.0:${port}`);
 }
 
 async function handleEvent(

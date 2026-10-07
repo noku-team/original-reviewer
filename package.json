@@ -10,7 +10,8 @@
     "test": "vitest run",
     "lint": "eslint . && tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "dev": "bun src/server.ts"
+    "dev": "bun src/server.ts",
+    "start": "bun src/server.ts"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
