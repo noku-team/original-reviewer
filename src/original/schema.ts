@@ -40,6 +40,49 @@ function asReview(value: unknown): Review {
   return { summary: value.summary, findings: value.findings.map(parseFinding) };
 }
 
+function firstJsonObject(text: string): string | undefined {
+  const start = text.indexOf("{");
+  if (start < 0) return undefined;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (esc) {
+        esc = false;
+        continue;
+      }
+      if (ch === "\\") {
+        esc = true;
+        continue;
+      }
+      if (ch === "\"") inStr = false;
+      continue;
+    }
+    if (ch === "\"") {
+      inStr = true;
+      continue;
+    }
+    if (ch === "{") depth += 1;
+    else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return undefined;
+}
+
+function jsonValue(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    const blob = firstJsonObject(text);
+    if (!blob) throw new Error("review is missing summary or findings");
+    return JSON.parse(blob) as unknown;
+  }
+}
+
 function fromOpenResponses(value: unknown): Review | undefined {
   if (!isRecord(value) || !Array.isArray(value.output)) return undefined;
   const texts: string[] = [];
@@ -54,11 +97,11 @@ function fromOpenResponses(value: unknown): Review | undefined {
   if (texts.length === 0) return undefined;
   const last = texts.at(-1);
   if (last === undefined) return undefined;
-  return asReview(JSON.parse(last) as unknown);
+  return asReview(jsonValue(last));
 }
 
 export function parseReview(outputText: string): Review {
-  const parsed: unknown = JSON.parse(outputText);
+  const parsed = jsonValue(outputText);
   const fromDoc = fromOpenResponses(parsed);
   if (fromDoc) return fromDoc;
   return asReview(parsed);

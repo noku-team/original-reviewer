@@ -11,6 +11,7 @@ afterEach(() => {
   delete process.env.ORIGINAL_CONNECT_CLIENT_ID;
   delete process.env.ORIGINAL_CONNECT_REDIRECT_URI;
   delete process.env.ORIGINAL_CONNECT_SCOPE;
+  delete process.env.ORIGINAL_BOT_ID;
 });
 
 function hostedEnv(): void {
@@ -35,6 +36,8 @@ describe("connect routes", () => {
 
   it("redirects to Original authorize with PKCE", async () => {
     hostedEnv();
+    process.env.ORIGINAL_BOT_ID = "bot-abc";
+    process.env.ORIGINAL_CONNECT_SCOPE = "openid agent.chat:";
     const app = createApp({
       queue: memoryQueue(),
       webhookSecret: "s",
@@ -49,7 +52,7 @@ describe("connect routes", () => {
     expect(loc.searchParams.get("state")).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(loc.searchParams.get("code_challenge_method")).toBe("S256");
     expect(loc.searchParams.get("code_challenge")).toMatch(/^[A-Za-z0-9_-]+$/);
-    expect(loc.searchParams.get("scope") ?? "").toContain("agent.chat:");
+    expect(loc.searchParams.get("scope")).toBe("openid agent.chat:bot-abc");
   });
 
   it("stores the bearer from the OAuth callback", async () => {

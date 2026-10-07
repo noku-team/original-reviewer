@@ -15,9 +15,12 @@ function pkcePair(): { verifier: string; challenge: string } {
 }
 
 export function connectScope(): string {
+  const bot = process.env.ORIGINAL_BOT_ID ?? "";
   const explicit = process.env.ORIGINAL_CONNECT_SCOPE;
-  if (!explicit || explicit.trim() === "openid") return "openid agent.chat:";
-  return explicit;
+  const base = !explicit || explicit.trim() === "openid" ? "openid agent.chat:" : explicit.trim();
+  // Original authorize 400s on trailing `agent.chat:` with no bot id.
+  if (bot && /(^|\s)agent\.chat:$/.test(base)) return `${base}${bot}`;
+  return base;
 }
 
 function tokenScope(token: string): string | undefined {
@@ -117,7 +120,10 @@ export function mountConnect(app: Hono, opts: ConnectOpts = {}): void {
     const token = typeof parsed === "object" && parsed !== null && "access_token" in parsed
       ? (parsed).access_token
       : undefined;
-    if (typeof token !== "string") return c.body("token exchange failed", 502);
+    if (typeof token !== "string") {
+      console.error(`connect token exchange ${response.status}`);
+      return c.body("token exchange failed", 502);
+    }
     const granted = tokenScope(token);
     if (!granted?.includes("agent.chat")) {
       console.error(`connect token missing agent.chat (got ${granted ?? "unknown"}); Original API will 401`);
