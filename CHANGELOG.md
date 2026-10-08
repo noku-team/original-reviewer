@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/noku-team/original-reviewer/compare/v0.1.0...v0.1.1) (2026-10-08)
+
+
+### Features
+
+* enhance error handling and logging in original client and run job ([85b4b89](https://github.com/noku-team/original-reviewer/commit/85b4b89e8c1e2b202f056476bb3316bfa9329c10))
+
 # 0.1.0 (2026-10-08)
 
 
