@@ -6,6 +6,13 @@ import { parseMarker } from "../review/marker.ts";
 
 const exec = promisify(execFile);
 
+const gitEnv = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
+
+export function gitHttpExtraHeader(token: string): string {
+  const basic = Buffer.from(`x-access-token:${token}`, "utf8").toString("base64");
+  return `AUTHORIZATION: basic ${basic}`;
+}
+
 export async function checkoutPull(opts: {
   url: string;
   dir: string;
@@ -14,20 +21,21 @@ export async function checkoutPull(opts: {
   token?: string | undefined;
   pr?: number | undefined;
 }): Promise<void> {
-  const auth = opts.token ? ["-c", `http.extraHeader=Authorization: bearer ${opts.token}`] : [];
-  await exec("git", [...auth, "clone", "--no-checkout", opts.url, opts.dir]);
-  if (opts.token) {
-    await exec("git", ["-C", opts.dir, "config", "http.extraHeader", `Authorization: bearer ${opts.token}`]);
+  const header = opts.token ? gitHttpExtraHeader(opts.token) : undefined;
+  const auth = header ? ["-c", `http.extraHeader=${header}`] : [];
+  await exec("git", [...auth, "clone", "--no-checkout", opts.url, opts.dir], { env: gitEnv });
+  if (header) {
+    await exec("git", ["-C", opts.dir, "config", "http.extraHeader", header], { env: gitEnv });
   }
   if (opts.pr !== undefined) {
-    await exec("git", ["-C", opts.dir, "fetch", "origin", `+refs/pull/${opts.pr}/head:refs/or-job/head`]);
+    await exec("git", ["-C", opts.dir, "fetch", "origin", `+refs/pull/${opts.pr}/head:refs/or-job/head`], { env: gitEnv });
   } else {
-    await exec("git", ["-C", opts.dir, "fetch", "origin", `+${opts.sha}:refs/or-job/head`]);
+    await exec("git", ["-C", opts.dir, "fetch", "origin", `+${opts.sha}:refs/or-job/head`], { env: gitEnv });
   }
   if (opts.baseSha && opts.baseSha !== opts.sha) {
-    await exec("git", ["-C", opts.dir, "fetch", "origin", `+${opts.baseSha}:refs/or-job/base`]);
+    await exec("git", ["-C", opts.dir, "fetch", "origin", `+${opts.baseSha}:refs/or-job/base`], { env: gitEnv });
   }
-  await exec("git", ["-C", opts.dir, "checkout", "--force", opts.sha]);
+  await exec("git", ["-C", opts.dir, "checkout", "--force", opts.sha], { env: gitEnv });
 }
 
 export async function pullDiff(dir: string, baseSha: string, sha: string): Promise<string> {

@@ -70,6 +70,7 @@ export function publicError(message: string): string {
   return message
     .replace(/x-access-token:[^@\s]+/gi, "x-access-token:***")
     .replace(/\bghs_[A-Za-z0-9]+/g, "ghs_***")
+    .replace(/AUTHORIZATION: basic \S+/gi, "AUTHORIZATION: basic ***")
     .replace(/Authorization: bearer \S+/gi, "Authorization: bearer ***")
     .replace(/Bearer\s+\S+/gi, "Bearer ***");
 }
