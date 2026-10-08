@@ -47,10 +47,16 @@ function anchorsFromDiff(diff: string): Set<string> {
   return anchors;
 }
 
+function looksLikeDiff(fix: string): boolean {
+  return /^(diff --git|@@ |[+-]{3} [ab/])/.test(fix) || /^[+-](?![+-])/m.test(fix);
+}
+
 function commentBody(finding: Finding): string {
   let body = `_${finding.severity}_\n\n${finding.text}`;
   const fix = finding.suggested_fix?.trim();
-  if (fix) body += `\n\n\`\`\`diff\n${fix}\n\`\`\``;
+  if (!fix) return body;
+  if (looksLikeDiff(fix)) body += `\n\n\`\`\`diff\n${fix}\n\`\`\``;
+  else body += `\n\n**Suggested fix:** ${fix}`;
   return body;
 }
 

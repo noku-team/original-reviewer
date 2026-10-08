@@ -76,4 +76,14 @@ describe("placeFindings", () => {
     expect(placed.comments[0]?.body).toContain("```diff\n-old\n+new\n```");
     expect(placed.comments[0]?.body).not.toContain("```suggestion");
   });
+
+  it("does not wrap prose suggested_fix in a fake diff fence", () => {
+    const placed = placeFindings({
+      diff,
+      review: review([finding({ suggested_fix: "Extract the shared row helper." })]),
+      requestChangesWorkflow: false,
+    });
+    expect(placed.comments[0]?.body).toContain("**Suggested fix:** Extract the shared row helper.");
+    expect(placed.comments[0]?.body).not.toContain("```diff");
+  });
 });
