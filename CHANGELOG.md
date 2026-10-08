@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.2](https://github.com/noku-team/original-reviewer/compare/v0.1.1...v0.1.2) (2026-10-08)
+
+
+### Features
+
+* add createReviewComment method to GitHost and implement comment posting in publishReview ([45cb262](https://github.com/noku-team/original-reviewer/commit/45cb262f6d334b2e25c98ced15924cd093e7e65b))
+* improve suggested fix formatting in comments ([83c07fc](https://github.com/noku-team/original-reviewer/commit/83c07fcdbc8ea22238ff5168ab2a24924628d847))
+
 ## [0.1.1](https://github.com/noku-team/original-reviewer/compare/v0.1.0...v0.1.1) (2026-10-08)
 
 
