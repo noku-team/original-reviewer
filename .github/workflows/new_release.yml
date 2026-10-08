@@ -1,0 +1,81 @@
+name: "new_release"
+
+on:
+  workflow_dispatch
+  # push:
+  #   branches:
+  #     - main
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/noku-team/original-reviewer
+  K8S_NAME: original-reviewer
+  AWS_REGION: eu-central-2
+  EKS_CLUSTER_NAME: original-ch-zh-k8s
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  push_to_registry:
+    needs: test
+    runs-on: ubuntu-latest
+    name: Push Docker image to GHCR
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ env.IMAGE }}:${{ github.sha }}, ${{ env.IMAGE }}:latest
+
+  deploy:
+    needs: push_to_registry
+    name: "Deploy on EKS"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      # Secret, so the account ID is masked in public run logs
+      ECR_IMAGE: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-central-2.amazonaws.com/github/noku-team/original-reviewer
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-original-reviewer
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.33.0
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
+
+      - name: Set Image
+        run: |
+          kubectl set image deployment/$K8S_NAME-deployment $K8S_NAME=$ECR_IMAGE:${{ github.sha }} -n $K8S_NAME --as=system:serviceaccount:$K8S_NAME:github-actions-deployer
+
+      - name: Check Deployment Status
+        run: kubectl rollout status deployment/$K8S_NAME-deployment -n $K8S_NAME --timeout=300s

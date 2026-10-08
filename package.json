@@ -11,7 +11,8 @@
     "lint": "eslint . && tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "dev": "bun src/server.ts",
-    "start": "bun src/server.ts"
+    "start": "bun src/server.ts",
+    "deploy": "gh workflow run new_release.yml --ref main && sleep 5 && gh run watch --exit-status $(gh run list --workflow new_release.yml --branch main --limit 1 --json databaseId -q '.[0].databaseId')"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
