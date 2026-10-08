@@ -44,6 +44,7 @@ function harness(over: Partial<RunDeps> & { authKind?: AuthKind } = {}) {
     },
     getPull: async () => ({ sha: "bbb", baseSha: "base", draft: false, description: "" }),
     createReview: async () => ({ status: 200, body: "{}" }),
+    createReviewComment: async () => ({ status: 200, body: "{}" }),
     upsertIssueComment: async (opts) => {
       comments.push(opts.body);
     },

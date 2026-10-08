@@ -1,12 +1,6 @@
 import { formatMarker } from "./marker.ts";
-import type { GitHost, ReviewComment } from "../host.ts";
+import type { GitHost } from "../host.ts";
 import type { Placed } from "./place.ts";
-
-function dropNamed(body: string, comments: ReviewComment[]): ReviewComment[] {
-  const named = comments.filter((c) => body.includes(c.path) && body.includes(String(c.line)));
-  if (named.length === 0) return [];
-  return comments.filter((c) => !named.some((n) => n.path === c.path && n.line === c.line && n.side === c.side));
-}
 
 export async function publishReview(opts: {
   host: GitHost;
@@ -17,27 +11,25 @@ export async function publishReview(opts: {
   conversationId?: string | undefined;
   graphPersisted: boolean;
 }): Promise<{ check: "success" | "failure" }> {
-  const payload = {
+  for (const comment of opts.placed.comments) {
+    const posted = await opts.host.createReviewComment({
+      repo: opts.repo,
+      pr: opts.pr,
+      commitId: opts.sha,
+      path: comment.path,
+      line: comment.line,
+      side: comment.side,
+      body: comment.body,
+    });
+    if (posted.status === 422) continue;
+  }
+  await opts.host.createReview({
     repo: opts.repo,
     pr: opts.pr,
     commitId: opts.sha,
     body: opts.placed.summary,
     event: opts.placed.event,
-  };
-  let comments: ReviewComment[] | undefined = opts.placed.comments.length
-    ? opts.placed.comments
-    : undefined;
-  let result = await opts.host.createReview({ ...payload, comments });
-  if (result.status === 422) {
-    comments = comments ? dropNamed(result.body, comments) : undefined;
-    result = await opts.host.createReview({
-      ...payload,
-      comments: comments && comments.length > 0 ? comments : undefined,
-    });
-  }
-  if (result.status === 422) {
-    await opts.host.createReview({ ...payload, comments: undefined });
-  }
+  });
   await opts.host.upsertIssueComment({
     repo: opts.repo,
     pr: opts.pr,

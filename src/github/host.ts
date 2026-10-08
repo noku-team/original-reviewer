@@ -141,6 +141,27 @@ export function githubHost(): GitHost {
         throw err;
       }
     },
+    createReviewComment: async (opts) => {
+      const octokit = await installationOctokit(opts.repo);
+      const { owner, name } = splitRepo(opts.repo);
+      try {
+        const { status, data } = await octokit.request("POST /repos/{owner}/{repo}/pulls/{pull_number}/comments", {
+          owner,
+          repo: name,
+          pull_number: opts.pr,
+          commit_id: opts.commitId,
+          path: opts.path,
+          line: opts.line,
+          side: opts.side,
+          subject_type: "line",
+          body: opts.body,
+        });
+        return { status, body: JSON.stringify(data) };
+      } catch (err) {
+        if (httpStatus(err) === 422) return { status: 422, body: httpBody(err) };
+        throw err;
+      }
+    },
     upsertIssueComment: async (opts) => {
       const octokit = await installationOctokit(opts.repo);
       const { owner, name } = splitRepo(opts.repo);

@@ -20,17 +20,17 @@ function placed(over: Partial<Placed> = {}): Placed {
 
 function fake(opts?: {
   reviews?: { status: number; body: string }[];
+  commentStatus?: number | undefined;
 }): {
   host: GitHost;
-  reviews: GitHost["createReview"] extends (...a: infer A) => unknown ? A[0][] : never;
+  reviews: Parameters<GitHost["createReview"]>[0][];
+  reviewComments: Parameters<GitHost["createReviewComment"]>[0][];
   checks: Parameters<GitHost["setCheckRun"]>[0][];
 } {
   const reviews: Parameters<GitHost["createReview"]>[0][] = [];
+  const reviewComments: Parameters<GitHost["createReviewComment"]>[0][] = [];
   const checks: Parameters<GitHost["setCheckRun"]>[0][] = [];
-  const queue = opts?.reviews ?? [
-    { status: 422, body: "Unprocessable" },
-    { status: 200, body: "{}" },
-  ];
+  const queue = opts?.reviews ?? [{ status: 200, body: "{}" }];
   const host: GitHost = {
     clone: async () => undefined,
     getPull: async () => ({ sha: "abc", baseSha: "base", draft: false, description: "" }),
@@ -38,18 +38,22 @@ function fake(opts?: {
       reviews.push(payload);
       return queue.shift() ?? { status: 200, body: "{}" };
     },
+    createReviewComment: async (payload) => {
+      reviewComments.push(payload);
+      return { status: opts?.commentStatus ?? 200, body: "{}" };
+    },
     upsertIssueComment: async () => undefined,
     listIssueComments: async () => [],
     setCheckRun: async (payload) => {
       checks.push(payload);
     },
   };
-  return { host, reviews, checks };
+  return { host, reviews, reviewComments, checks };
 }
 
 describe("publishReview", () => {
-  it("retries a 422 without comments", async () => {
-    const { host, reviews } = fake();
+  it("posts each finding as its own review comment thread", async () => {
+    const { host, reviews, reviewComments } = fake();
     await publishReview({
       host,
       repo: "acme/app",
@@ -58,10 +62,34 @@ describe("publishReview", () => {
       placed: placed(),
       graphPersisted: true,
     });
-    expect(reviews).toHaveLength(2);
-    const retry = reviews[1];
-    expect(retry).toBeDefined();
-    expect(retry?.comments === undefined || retry.comments.length === 0).toBe(true);
+    expect(reviewComments).toEqual([
+      {
+        repo: "acme/app",
+        pr: 1,
+        commitId: "abc",
+        path: "src/a.ts",
+        line: 4,
+        side: "RIGHT",
+        body: "_minor_\n\nnit",
+      },
+    ]);
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0]?.comments).toBeUndefined();
+  });
+
+  it("skips a finding when GitHub rejects the thread with 422", async () => {
+    const { host, reviews, reviewComments } = fake({ commentStatus: 422 });
+    await publishReview({
+      host,
+      repo: "acme/app",
+      pr: 1,
+      sha: "abc",
+      placed: placed(),
+      graphPersisted: true,
+    });
+    expect(reviewComments).toHaveLength(1);
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0]?.comments).toBeUndefined();
   });
 
   it("marks the check success for COMMENT and failure for REQUEST_CHANGES", async () => {
