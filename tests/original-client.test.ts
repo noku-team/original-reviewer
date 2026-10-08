@@ -73,6 +73,22 @@ describe("originalClient", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("throws original 403 without leaking the bearer token", async () => {
+    const fetchMock = vi.fn(async () => new Response('{"error":"forbidden bot"}', { status: 403 }));
+    const client = originalClient({
+      baseUrl: "https://api.example",
+      botId: "bot-1",
+      fetch: fetchMock as unknown as typeof fetch,
+    });
+    await expect(
+      client.review({
+        messages: ["hello"],
+        auth: { kind: "bearer", token: "secret-token" },
+        shrink: () => undefined,
+      }),
+    ).rejects.toThrow("original 403");
+  });
+
   it("throws after three 500s", async () => {
     const fetchMock = vi.fn(async () => new Response("nope", { status: 500 }));
     const client = originalClient({

@@ -128,6 +128,23 @@ describe("runJob", () => {
     expect(checks.at(-1)?.conclusion).toBe("neutral");
   });
 
+  it("asks to reconnect Original on 403", async () => {
+    process.env.ORIGINAL_CONNECT_AUTHORIZE_URL = "https://ai.original.land/oauth/authorize";
+    process.env.ORIGINAL_CONNECT_REDIRECT_URI = "https://reviewer.example/connect/callback";
+    const fetchMock = vi.fn(async () => new Response("no", { status: 403 }));
+    const { deps, checks, comments } = harness({
+      original: originalClient({
+        baseUrl: "https://api.example",
+        botId: "bot",
+        fetch: fetchMock as unknown as typeof fetch,
+      }),
+    });
+    await runJob(job(), deps);
+    expect(comments.join("\n")).toMatch(/403/);
+    expect(comments.join("\n")).toMatch(/Reconnect Original/i);
+    expect(checks.at(-1)?.conclusion).toBe("neutral");
+  });
+
   it("pushes the graph to the base repo for a fork PR", async () => {
     const { deps, pushRemotes } = harness();
     await runJob(job({ forkRepo: "alice/app", repo: "acme/app" }), deps);

@@ -221,6 +221,9 @@ export async function runJob(job: Job, deps: RunDeps): Promise<void> {
       return;
     }
 
+    deps.log(
+      `original ${auth.kind} ${job.repo}#${job.pr} mode=${mode} msgs=${String(assembled.messages.length)} bytes=${String(assembled.messages.reduce((n, m) => n + m.length, 0))}`,
+    );
     const result = await deps.original.review({
       messages: assembled.messages,
       conversationId: mode === "follow-up" ? marker?.conversationId : undefined,
@@ -245,7 +248,7 @@ export async function runJob(job: Job, deps: RunDeps): Promise<void> {
   } catch (err) {
     const summary = publicError(err instanceof Error ? err.message : "review failed");
     deps.log(summary);
-    const reconnect = summary === "original 401" && process.env.ORIGINAL_CONNECT_AUTHORIZE_URL;
+    const reconnect = /^original 40[13]$/.test(summary) && Boolean(process.env.ORIGINAL_CONNECT_AUTHORIZE_URL);
     const origin = process.env.ORIGINAL_CONNECT_REDIRECT_URI
       ? new URL(process.env.ORIGINAL_CONNECT_REDIRECT_URI).origin
       : undefined;
@@ -256,7 +259,7 @@ export async function runJob(job: Job, deps: RunDeps): Promise<void> {
       repo: job.repo,
       pr: job.pr,
       body: reconnect
-        ? `Original rejected the Connect token (401). [Reconnect Original](${connectHref}), then comment \`@${deps.slug} review\`.`
+        ? `Original rejected the Connect token (${summary}). [Reconnect Original](${connectHref}), then comment \`@${deps.slug} review\`.`
         : `Review failed: ${summary}`,
     });
     await failCheck(deps.host, job, reconnect ? "neutral" : "failure", summary);

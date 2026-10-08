@@ -75,9 +75,18 @@ export function originalClient(opts: {
       }
       lastStatus = response.status;
       if (response.status === 413) throw new Error("original 413");
-      if (response.status >= 500) continue;
+      if (response.status >= 500) {
+        console.error(`original ${response.status} ${url} attempt=${attempt + 1}`);
+        continue;
+      }
       const text = await response.text();
-      if (!response.ok) throw new Error(`original ${response.status}`);
+      if (!response.ok) {
+        const snippet = text.replace(/\s+/g, " ").slice(0, 400);
+        console.error(
+          `original ${response.status} ${url} auth=${auth.kind} conv=${conversationId ? "yes" : "no"} bytes=${message.length} ${snippet}`,
+        );
+        throw new Error(`original ${response.status}`);
+      }
       return {
         review: parseReview(text),
         conversationId: conversationFrom(response.headers) ?? conversationId,
