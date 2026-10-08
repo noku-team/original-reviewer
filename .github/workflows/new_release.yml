@@ -1,10 +1,13 @@
 name: "new_release"
 
 on:
-  workflow_dispatch
-  # push:
-  #   branches:
-  #     - main
+  workflow_dispatch:
+    inputs:
+      increment:
+        description: "Version bump (auto = from conventional commits)"
+        type: choice
+        default: auto
+        options: [auto, patch, minor, major]
 
 permissions:
   contents: read
@@ -19,8 +22,42 @@ jobs:
   test:
     uses: ./.github/workflows/ci.yml
 
-  push_to_registry:
+  release:
     needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: git config
+        run: |
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - run: bun install --frozen-lockfile
+
+      - name: Release
+        run: bun run release -- --ci ${{ inputs.increment != 'auto' && inputs.increment || '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get version
+        id: get_version
+        run: echo "version=$(cat .CI_VERSION)" >> $GITHUB_OUTPUT
+
+  push_to_registry:
+    needs: release
+    if: ${{ needs.release.outputs.version }}
     runs-on: ubuntu-latest
     name: Push Docker image to GHCR
     permissions:
@@ -28,28 +65,31 @@ jobs:
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.version }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ env.IMAGE }}:${{ github.sha }}, ${{ env.IMAGE }}:latest
+          tags: ${{ env.IMAGE }}:${{ needs.release.outputs.version }}, ${{ env.IMAGE }}:latest
 
   deploy:
-    needs: push_to_registry
+    needs: [release, push_to_registry]
+    if: ${{ needs.release.outputs.version }}
     name: "Deploy on EKS"
     runs-on: ubuntu-latest
     permissions:
@@ -60,13 +100,13 @@ jobs:
       ECR_IMAGE: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-central-2.amazonaws.com/github/noku-team/original-reviewer
     steps:
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-original-reviewer
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup kubectl
-        uses: azure/setup-kubectl@v4
+        uses: azure/setup-kubectl@v5
         with:
           version: v1.33.0
 
@@ -75,7 +115,7 @@ jobs:
 
       - name: Set Image
         run: |
-          kubectl set image deployment/$K8S_NAME-deployment $K8S_NAME=$ECR_IMAGE:${{ github.sha }} -n $K8S_NAME --as=system:serviceaccount:$K8S_NAME:github-actions-deployer
+          kubectl set image deployment/$K8S_NAME-deployment $K8S_NAME=$ECR_IMAGE:${{ needs.release.outputs.version }} -n $K8S_NAME --as=system:serviceaccount:$K8S_NAME:github-actions-deployer
 
       - name: Check Deployment Status
         run: kubectl rollout status deployment/$K8S_NAME-deployment -n $K8S_NAME --timeout=300s

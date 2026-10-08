@@ -1,5 +1,6 @@
 {
   "name": "original-reviewer",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.3.10",
@@ -12,17 +13,42 @@
     "typecheck": "tsc --noEmit",
     "dev": "bun src/server.ts",
     "start": "bun src/server.ts",
-    "deploy": "gh workflow run new_release.yml --ref main && sleep 5 && gh run watch --exit-status $(gh run list --workflow new_release.yml --branch main --limit 1 --json databaseId -q '.[0].databaseId')"
+    "release": "release-it",
+    "deploy": "./scripts/deploy.sh"
+  },
+  "release-it": {
+    "git": {
+      "requireBranch": "main",
+      "commitMessage": "chore(release): v${version}",
+      "tagName": "v${version}"
+    },
+    "hooks": {
+      "after:release": "echo -n \"v${version}\" > .CI_VERSION"
+    },
+    "github": {
+      "release": true
+    },
+    "npm": {
+      "publish": false
+    },
+    "plugins": {
+      "@release-it/conventional-changelog": {
+        "infile": "CHANGELOG.md",
+        "preset": "angular"
+      }
+    }
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
     "@eslint/js": "^9.37.0",
+    "@release-it/conventional-changelog": "10.0.5",
     "@types/bun": "^1.3.0",
     "@types/minimatch": "^5.1.2",
     "eslint": "^9.37.0",
     "eslint-config-airbnb-base": "^15.0.0",
     "eslint-import-resolver-typescript": "^4.4.4",
     "eslint-plugin-import": "^2.32.0",
+    "release-it": "19.2.4",
     "typescript": "^5.8.2",
     "typescript-eslint": "^8.46.0",
     "vitest": "^3.0.8"
